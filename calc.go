@@ -6,13 +6,14 @@ import (
 	"io"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 )
 
-// Reads from the 'compute' topic, calcs results, and writes to the 'results' topic. If any error, just
-// goes to sleep and waits for the program to be terminated
-func calc(writer *kafka.Writer, url string) {
+// Reads from the 'compute' topic, calcs results, and writes to the 'results' topic. Blocks reading from the
+// compute topic indefinitely. So once the topic is emptied, this function will block indefinitely
+func calc(writer *kafka.Writer, url string) bool {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:   strings.Split(url, ","),
 		GroupID:   "kafka-scale-consumer-group",
@@ -24,17 +25,20 @@ func calc(writer *kafka.Writer, url string) {
 
 	for {
 		// ReadMessage blocks
+		if verbose {
+			log.Printf("reading message from topic: %v\n", compute_topic)
+		}
 		m, err := r.ReadMessage(context.Background())
 		if err != nil {
 			if err == io.EOF {
-				log.Printf("reader for topic %v has been closed\n. Going to sleep permanently", compute_topic)
-				select{}
+				log.Printf("reader for topic %v has been closed\n", compute_topic)
+				return false
 			}
 			log.Printf("error getting chunk from topic: %v, error is: %v\n", compute_topic, err)
-			break
+			return false
 		}
 		if verbose {
-			log.Printf("read message: %v, topic: %v, part: %v, offset: %v\n", m.Key, m.Topic, m.Partition, m.Offset)
+			log.Printf("message was read. key: %v, topic: %v, part: %v, offset: %v\n", m.Key, m.Topic, m.Partition, m.Offset)
 		}
 		scanner := bufio.NewScanner(strings.NewReader(string(m.Value)))
 		codes := ""
@@ -47,12 +51,13 @@ func calc(writer *kafka.Writer, url string) {
 			codes += separator + strings.TrimSpace(line[30:32])
 			separator = ","
 		}
+		time.Sleep(300 * time.Millisecond)
 		if stdout {
 			log.Printf("codes: %v\n", codes)
 		} else if !quiet {
 			if err := writeMessage(writer, codes); err != nil {
-				log.Printf("error writing codes to Kafka - error is: %v. Going to sleep permanently\n", err)
-				select {}
+				log.Printf("error writing codes to Kafka - error is: %v\n", err)
+				return false
 			}
 		}
 	}

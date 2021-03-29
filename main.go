@@ -56,11 +56,7 @@ func main() {
 	var writer *kafka.Writer
 	var err error
 
-	// TODO CREATE THE TOPICS HERE IF NEEDED!!!
-
 	switch command {
-	case rmtopics:
-		deleteTopics(kafkaBrokers, topic)
 	case read:
 		if kafkaBrokers != "" {
 			conn, err = connectKakfa(kafkaBrokers)
@@ -68,36 +64,40 @@ func main() {
 				log.Printf("error connecting to Kafka at: %v, error is: %v\n", kafkaBrokers, err)
 				return
 			}
+			if err := createTopicIfNotExists(conn, compute_topic, partitionCnt, replicationFactor); err != nil {
+				log.Printf("error creating topic %v, error is:%v\n", compute_topic, err)
+				return
+			}
 			writer = newKafkaWriter(kafkaBrokers, compute_topic)
 			defer conn.Close()
 			defer writer.Close()
-		}
-		if err := createTopicIfNotExists(conn, compute_topic, partitionCnt, replicationFactor); err != nil {
-			log.Printf("error creating topic %v, error is:%v\n", compute_topic, err)
-			return
 		}
 		if chunks, ok := readAndChunk(writer, fromFile); !ok {
 			log.Printf("error processing census data. %v chunks were processed before stopping\n", chunks)
 		} else {
 			log.Printf("no errors were encountered processing census data. %v chunks were processed\n", chunks)
 		}
+		select {}
 	case compute:
 		conn, err = connectKakfa(kafkaBrokers)
 		if err != nil {
 			log.Printf("error connecting to Kafka at: %v, error is: %v\n", kafkaBrokers, err)
 			return
 		}
-		writer = newKafkaWriter(kafkaBrokers, results_topic)
-		defer conn.Close()
-		defer writer.Close()
 		if err := createTopicIfNotExists(conn, results_topic, partitionCnt, replicationFactor); err != nil {
 			log.Printf("error creating topic %v, error is:%v\n", results_topic, err)
 			return
 		}
+		writer = newKafkaWriter(kafkaBrokers, results_topic)
+		defer conn.Close()
+		defer writer.Close()
 		calc(writer, kafkaBrokers)
+		select {}
 	case topiclist:
 		getTopics(kafkaBrokers)
 	case offsets:
 		listOffsets(kafkaBrokers, topic)
+	case rmtopics:
+		deleteTopics(kafkaBrokers, topic)
 	}
 }
