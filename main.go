@@ -31,6 +31,9 @@ const (
 	offsets   = "offsets"
 )
 
+// Readers of the compute topic all read as part of this consumer group
+const computeConsumer = "kafka-scale-consumer-group"
+
 // Usage:
 //
 // IP=$(kubectl -n kafka get node ham -o=jsonpath='{range .status.addresses[?(@.type == "InternalIP")]}{.address}{"\n"}')

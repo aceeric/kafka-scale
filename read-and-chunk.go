@@ -16,9 +16,17 @@ import (
 
 const gzurl = "https://www2.census.gov/programs-surveys/cps/datasets/%v/basic/%v%vpub.dat.gz"
 
-// Iterates the years and months arrays. Builds a URL with the year and month encoded the way the CPS
-// website requires. Calls oneGz to process the GZIP. Returns the number of chunks processed and true if
-// success, else false if error, Stops if command line configurable chunk count met
+// Reads census data and chunks the data into the 'compute' topic. Operates in two modes based on args:
+//
+// If fromFile arg is not empty, then assumes this is the FQPN of a downloaded census gzip. In this case,
+// processes the file via the oneGz func.
+//
+// If fromFile is empty, uses package level 'yearsArr' and 'monthsArr' initialized from the command line.
+// In a nested for-loop, builds a URL to a census gzip with the year and month encoded the way the CPS
+// website requires and calls oneGz to process each GZIP.
+//
+// In both scenarios, returns the number of chunks processed and true if success, else false if error. Also,
+// supports throttling via the package-level 'chunkCount' variable initialized from the command line.
 func readAndChunk(writer *kafka.Writer, fromFile string) (int, bool) {
 	chunks := 0
 	if fromFile != "" {
@@ -28,7 +36,7 @@ func readAndChunk(writer *kafka.Writer, fromFile string) (int, bool) {
 		for _, month := range monthsArr {
 			if chunks, ok := oneGz(writer, chunks, fmt.Sprintf(gzurl, year, month, strconv.Itoa(year)[2:])); !ok {
 				return chunks, false
-			} else if chunks >= chunkCount {
+			} else if chunkCount >= 0 && chunks >= chunkCount {
 				return chunks, true
 			}
 		}
@@ -36,11 +44,14 @@ func readAndChunk(writer *kafka.Writer, fromFile string) (int, bool) {
 	return chunks, true
 }
 
-// Processes a census gzip dataset. Can take either a file (mostly for testing), or an http URL to the censs
-// site. Either way gets the GZIP, extracts to memory, chunks the output to Kafka, or to stdout, or doesn't chunk
-// depending on the command line. If chunking, each 10 lines of input is concatenated into a chunk. Returns the
-// number of chunks processed and true if success, else false if error. Stops if command line configurable
-// chunk count met
+// Processes one census gzip dataset. Can take either a file (mostly for testing), or an http URL to the census
+// site. Either way streams the GZIP, chunks the output to Kafka, or to stdout, or doesn't chunk depending on
+// the command line. If chunking, each 10 lines of input is concatenated into a chunk and written to the
+// compute topic in Kafka. (Can also chunk to the console if the package-level 'stdout' var is set to true
+// from the command line.)
+//
+// Returns the cumulative number of chunks processed so far (including chunks from prior calls) and true if success,
+// else false if error. Returns if package var 'chunkCount' count is met.
 func oneGz(writer *kafka.Writer, chunks int, url string) (int, bool) {
 	var rdr io.Reader
 	var err error
@@ -93,7 +104,7 @@ func oneGz(writer *kafka.Writer, chunks int, url string) (int, bool) {
 			cnt = 0
 			chunk = ""
 		}
-		if chunks >= chunkCount {
+		if chunkCount >= 0 && chunks >= chunkCount {
 			log.Printf("chunk count met: %v. Stopping\n", chunks)
 			return chunks, true
 		}

@@ -15,7 +15,7 @@ import (
 	kafka "github.com/segmentio/kafka-go"
 )
 
-// valid topics. The tabulation topic holds chunks for computation. The results topic holds the results
+// valid topics. The compute topic holds chunks for computation. The results topic holds the results
 // of a computation performed with data from the tabulation topic
 const (
 	compute_topic = "compute"
@@ -41,27 +41,6 @@ func writeMessage(writer *kafka.Writer, message string) error {
 		return err
 	}
 	return nil
-}
-
-// Creates and returns a new Kafka writer for the passed topic
-func newKafkaWriter(url string, topic string) *kafka.Writer {
-	return &kafka.Writer{
-		Addr:      kafka.TCP(url),
-		Topic:     topic,
-		BatchSize: 1,
-		Balancer:  &kafka.LeastBytes{},
-		RequiredAcks: kafka.RequireNone,
-	}
-}
-
-// Creates and returns a connection to Kafka
-func connectKakfa(url string) (*kafka.Conn, error) {
-	conn, err := kafka.Dial("tcp", url)
-	if err != nil {
-		log.Printf("error connecting to Kafka url: %v, error is: %v\n", url, err)
-		return nil, err
-	}
-	return conn, nil
 }
 
 // Creates a topic if it does not already exist. If topic exists, then no change is made to Kafka
@@ -104,9 +83,7 @@ func createTopicIfNotExists(conn *kafka.Conn, topic string, partitionCnt int, re
 	return nil
 }
 
-// Just a smoke test function - lists the topics in kafka. If this works, then assume we have
-// a good Kafka instance and connectivity configuration. This creates a Kafka connection and then
-// closes it.
+// Lists the topics in kafka to the console, sorted by partition name and then ID
 func getTopics(url string) {
 	conn, err := connectKakfa(url)
 	if err != nil {
@@ -139,7 +116,7 @@ func getTopics(url string) {
 	}
 }
 
-// Gets all the partitions for a topic as an array of int, sorted ascending
+// Gets all the partition IDs for a topic as an array of int, sorted ascending
 func getPartitionsForTopic(url string, topic string) ([]int, error) {
 	conn, err := connectKakfa(url)
 	if err != nil {
@@ -162,30 +139,27 @@ func getPartitionsForTopic(url string, topic string) ([]int, error) {
 	return topicPartitions, nil
 }
 
-// TODO delete this function after kafka-go issue resolved
-func foo(url string, topic string) {
+// deletes the passed topics. Supports testing. Topics is a comma-separated list of topics. E.g.: "footopic,bartopic"
+func deleteTopics(url string, topics string) {
 	client, shutdown := newClient(kafka.TCP(url))
 	defer shutdown()
-	partitions := []int{0, 1, 2}
-	var offsetRequests []kafka.OffsetRequest
-	for _, partition := range partitions {
-		offsetRequests = append(offsetRequests, kafka.FirstOffsetOf(partition), kafka.LastOffsetOf(partition))
-	}
-	res, _ := client.ListOffsets(context.Background(), &kafka.ListOffsetsRequest{
-		Topics: map[string][]kafka.OffsetRequest{
-			topic: offsetRequests,
-		},
+
+	topicArray := strings.Split(topics, ",")
+	res, err := client.DeleteTopics(context.Background(), &kafka.DeleteTopicsRequest{
+		Topics: topicArray,
 	})
-	partitionOffsets, _ := res.Topics[topic]
-	fmt.Printf("Listing offsets for topic: %v\n\n", topic)
-	format := "%-20v%-20v%-20v\n"
-	fmt.Printf(format, "Partition", "FirstOffset", "LastOffset")
-	for _, partition := range partitionOffsets {
-		fmt.Printf(format, partition.Partition, partition.FirstOffset, partition.LastOffset)
+	if err != nil {
+		log.Printf("error deleting topics: %v, error is: %v\n", topics, err)
+		return
+	}
+	for _, topic := range topicArray {
+		if err := res.Errors[topic]; err != nil {
+			log.Printf("error deleting topic: %v, error is: %v\n", topic, err)
+		}
 	}
 }
 
-// Lists the offsets for all partitions in the passed topic
+// Lists the offsets for all partitions in the passed topic to the console.
 func listOffsets(url string, topic string) {
 	partitions, err := getPartitionsForTopic(url, topic)
 	if err != nil {
@@ -197,7 +171,7 @@ func listOffsets(url string, topic string) {
 
 	// first get "Committed"
 	offsets, err := client.OffsetFetch(context.Background(), &kafka.OffsetFetchRequest{
-		GroupID: "kafka-scale-consumer-group",
+		GroupID: computeConsumer,
 		Topics: map[string][]int{
 			topic: partitions,
 		},
@@ -257,47 +231,29 @@ func listOffsets(url string, topic string) {
 	}
 }
 
-// Lists the offsets for all partitions in the passed topic
-// DEPRECATED per https://github.com/segmentio/kafka-go/issues/620
-func listOffsetsDEPRECATED(url string, topic string) {
+//
+// connection-related functions
+//
 
-	client, shutdown := newClient(kafka.TCP(url))
-	defer shutdown()
-	partitions, err := getPartitionsForTopic(url, topic)
+// Creates and returns a new Kafka writer for the passed topic
+func newKafkaWriter(url string, topic string) *kafka.Writer {
+	return &kafka.Writer{
+		Addr:      kafka.TCP(url),
+		Topic:     topic,
+		BatchSize: 1,
+		Balancer:  &kafka.LeastBytes{},
+		RequiredAcks: kafka.RequireNone,
+	}
+}
+
+// Creates and returns a connection to Kafka
+func connectKakfa(url string) (*kafka.Conn, error) {
+	conn, err := kafka.Dial("tcp", url)
 	if err != nil {
-		log.Printf("error getting partitions for topic: %v, error is: %v\n", topic, err)
-		return
+		log.Printf("error connecting to Kafka url: %v, error is: %v\n", url, err)
+		return nil, err
 	}
-	var offsetRequests []kafka.OffsetRequest
-	for _, partition := range partitions {
-		offsetRequests = append(offsetRequests, kafka.FirstOffsetOf(partition), kafka.LastOffsetOf(partition))
-	}
-	res, err := client.ListOffsets(context.Background(), &kafka.ListOffsetsRequest{
-		Topics: map[string][]kafka.OffsetRequest{
-			topic: offsetRequests,
-		},
-	})
-	if err != nil {
-		log.Printf("error listing offsets for topic: %v, error is: %v\n", url, err)
-		return
-	}
-	partitionOffsets, ok := res.Topics[topic]
-	if !ok {
-		log.Printf("error getting partition offsets for topic: %v, error is: %v\n", url, err)
-		return
-	}
-	sort.Slice(partitionOffsets[:], func(i, j int) bool {
-		if partitionOffsets[i].Partition < partitionOffsets[j].Partition {
-			return true
-		}
-		return false
-	})
-	fmt.Printf("Listing offsets for topic: %v\n\n", topic)
-	format := "%-20v%-20v%-20v\n"
-	fmt.Printf(format, "Partition", "FirstOffset", "LastOffset")
-	for _, partition := range partitionOffsets {
-		fmt.Printf(format, partition.Partition, partition.FirstOffset, partition.LastOffset)
-	}
+	return conn, nil
 }
 
 // Creates a new Kafka client which can be used to query topic partitions and offsets
@@ -316,24 +272,4 @@ func newClient(addr net.Addr) (*kafka.Client, func()) {
 	}
 	conns := &ConnWaitGroup{}
 	return client, func() { transport.CloseIdleConnections(); conns.Wait() }
-}
-
-// deletes the passed topics. Supports testing
-func deleteTopics(url string, topics string) {
-	client, shutdown := newClient(kafka.TCP(url))
-	defer shutdown()
-
-	topicArray := strings.Split(topics, ",")
-	res, err := client.DeleteTopics(context.Background(), &kafka.DeleteTopicsRequest{
-		Topics: topicArray,
-	})
-	if err != nil {
-		log.Printf("error deleting topics: %v, error is: %v\n", topics, err)
-		return
-	}
-	for _, topic := range topicArray {
-		if err := res.Errors[topic]; err != nil {
-			log.Printf("error deleting topic: %v, error is: %v\n", topic, err)
-		}
-	}
 }

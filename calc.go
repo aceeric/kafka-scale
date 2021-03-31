@@ -6,20 +6,19 @@ import (
 	"io"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/segmentio/kafka-go"
 )
 
-// Reads from the 'compute' topic, calcs results, and writes to the 'results' topic. Blocks reading from the
+// Reads from the 'compute' topic, calculates results, and writes to the 'results' topic. Blocks reading from the
 // compute topic indefinitely. So once the topic is emptied, this function will block indefinitely
 func calc(writer *kafka.Writer, url string) bool {
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:   strings.Split(url, ","),
-		GroupID:   "kafka-scale-consumer-group",
-		Topic:     compute_topic,
-		MinBytes:  10e3, // 10KB
-		MaxBytes:  10e6, // 10MB
+		Brokers:  strings.Split(url, ","),
+		GroupID:  computeConsumer,
+		Topic:    compute_topic,
+		MinBytes: 10e3, // 10KB
+		MaxBytes: 10e6, // 10MB
 	})
 	defer r.Close()
 
@@ -51,7 +50,8 @@ func calc(writer *kafka.Writer, url string) bool {
 			codes += separator + strings.TrimSpace(line[30:32])
 			separator = ","
 		}
-		time.Sleep(300 * time.Millisecond)
+		// todo simulate some compute time
+		//time.Sleep(300 * time.Millisecond)
 		if stdout {
 			log.Printf("codes: %v\n", codes)
 		} else if !quiet {
