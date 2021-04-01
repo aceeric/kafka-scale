@@ -22,6 +22,7 @@ func init() {
 	flag.StringVar(&topic, "topic", "", "If listing offsets, this is the topic for which to list offsets. If deleting topics, this is a comma-separated list of topics to delete")
 	flag.BoolVar(&verbose, "verbose", false, "Prints verbose diagnostic messages")
 	flag.IntVar(&port, "port", 8888, "REST endpoint port - defaults to 8888")
+	flag.BoolVar(&withMetrics, "with-metrics", false, "Enables metrics exposition on port 9090")
 }
 
 var validCommands = []string {read, compute, results, topiclist, offsets, rmtopics}

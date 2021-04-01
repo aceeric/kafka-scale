@@ -22,6 +22,7 @@ var fromFile string
 var topic string
 var verbose bool
 var port int
+var withMetrics bool
 
 const (
 	// supported commands
@@ -71,6 +72,11 @@ func main() {
 	if dryRun {
 		doDryRun()
 		return
+	}
+	withMetrics = true
+	if withMetrics {
+		startMetrics()
+		defer stopMetrics()
 	}
 	var conn *kafka.Conn
 	var writer *kafka.Writer
