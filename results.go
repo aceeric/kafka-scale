@@ -42,8 +42,8 @@ var housingResults = map[int]HousingResult{
 // into its codes, and the for each code, increments the count of the `housingResult` item in the `housingResults'
 // map whose entry is identified by the code. Invalid codes are simply ignored. Modifications to the `housingResults'
 // variable are guarded by a mutex since this data is also available for consumption via a REST endpoint.
-func accumulateAndServeResults(url string) {
-	go serveResults()
+func accumulateAndServeResults(url string, port int) {
+	go serveResults(port)
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:       strings.Split(url, ","),
 		GroupID:       consumerGrpForTopic[results_topic],
@@ -85,17 +85,16 @@ func accumulateAndServeResults(url string) {
 	}
 }
 
-func serveResults() {
+func serveResults(port int) {
 	r := mux.NewRouter()
 	r.HandleFunc("/results", resultsHandler)
 
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         "127.0.0.1:8888",
+		Addr:         "127.0.0.1:" + strconv.Itoa(port),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
-
 	log.Fatal(srv.ListenAndServe())
 }
 

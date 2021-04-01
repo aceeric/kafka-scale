@@ -115,7 +115,7 @@ func main() {
 		select {}
 
 	case results:
-		accumulateAndServeResults(kafkaBrokers)
+		accumulateAndServeResults(kafkaBrokers, port)
 	case topiclist:
 		getTopics(kafkaBrokers)
 	case offsets:
