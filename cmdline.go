@@ -21,6 +21,7 @@ func init() {
 	flag.StringVar(&fromFile, "from-file", "", "FQPN of census file to load (don't download - use filesystem)")
 	flag.StringVar(&topic, "topic", "", "If listing offsets, this is the topic for which to list offsets. If deleting topics, this is a comma-separated list of topics to delete")
 	flag.BoolVar(&verbose, "verbose", false, "Prints verbose diagnostic messages")
+	flag.IntVar(&port, "port", 8888, "REST endpoint port - defaults to 8888")
 }
 
 var validCommands = []string {read, compute, results, topiclist, offsets, rmtopics}
@@ -44,7 +45,6 @@ func validateCmdline() bool {
 			return false
 		}
 	}
-
 	if !(stdout || quiet) && kafkaBrokers == "" {
 		log.Printf("need a Kafka cluster bootstrap URL\n")
 		return false

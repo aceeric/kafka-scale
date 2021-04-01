@@ -171,7 +171,7 @@ func listOffsets(url string, topic string) {
 
 	// first get "Committed"
 	offsets, err := client.OffsetFetch(context.Background(), &kafka.OffsetFetchRequest{
-		GroupID: computeConsumer,
+		GroupID: consumerGrpForTopic[topic],
 		Topics: map[string][]int{
 			topic: partitions,
 		},

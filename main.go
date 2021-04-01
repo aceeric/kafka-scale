@@ -21,29 +21,46 @@ var replicationFactor int
 var fromFile string
 var topic string
 var verbose bool
+var port int
 
 const (
+	// supported commands
+
+	// read a dataset, and chunk it into the 'compute' queue
 	read      = "read"
+	// read the 'compute` queue, compute results, write to the 'results' queue
 	compute   = "compute"
+	// read the 'results' queue, summarize results into memory, serve the results as JSON via a REST call
 	results   = "results"
+	// list all topics
 	topiclist = "topiclist"
+	// remove comma-separated list of topics
 	rmtopics  = "rmtopics"
+	// list offsets of one specified topic
 	offsets   = "offsets"
+
+	// Readers of the compute topic all read as part of this consumer group
+	computeConsumer = "kafka-scale-consumer-group"
+	resultConsumer = "kafka-scale-results-consumer-group"
 )
 
-// Readers of the compute topic all read as part of this consumer group
-const computeConsumer = "kafka-scale-consumer-group"
+// maps consumer groups to topics. The code always reads from a topic as part of a consumer group because
+// that enables using the Kafka.NewReader functionality with auto-commit, etc.
+var consumerGrpForTopic = map[string]string {
+	compute: computeConsumer,
+	results: resultConsumer,
+}
 
 // Usage:
 //
 // IP=$(kubectl -n kafka get node ham -o=jsonpath='{range .status.addresses[?(@.type == "InternalIP")]}{.address}{"\n"}')
 // PORT=$(kubectl -n kafka get svc my-cluster-kafka-external-0 -o=jsonpath='{.spec.ports[0].nodePort}{"\n"}')
 //
-// ./kafka-scale --kafka=$IP:$PORT --years=2015 --months=jan,feb --chunks 10 read
+// ./kafka-scale --kafka=$IP:$PORT --years=2015 --months=jan,feb --chunks 1000 read
 // ./kafka-scale --from-file=/home/eace/Downloads/dec20pub.dat.gz --kafka=$IP:$PORT --partitions=10 --chunks=100 read
 // ./kafka-scale --kafka=$IP:$PORT --stdout compute
-// ./kafka-scale --kafka=$IP:$PORT compute
-// ./kafka-scale --kafka=$IP:$PORT results
+// ./kafka-scale --kafka=$IP:$PORT --verbose compute
+// ./kafka-scale --kafka=$IP:$PORT --verbose results
 // ./kafka-scale --kafka=$IP:$PORT topiclist
 // ./kafka-scale --kafka=$IP:$PORT --topic=compute offsets
 // ./kafka-scale --kafka=$IP:$PORT --topic=compute,result rmtopics
@@ -96,6 +113,9 @@ func main() {
 		defer writer.Close()
 		calc(writer, kafkaBrokers)
 		select {}
+
+	case results:
+		accumulateAndServeResults(kafkaBrokers)
 	case topiclist:
 		getTopics(kafkaBrokers)
 	case offsets:

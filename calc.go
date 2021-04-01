@@ -14,11 +14,12 @@ import (
 // compute topic indefinitely. So once the topic is emptied, this function will block indefinitely
 func calc(writer *kafka.Writer, url string) bool {
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:  strings.Split(url, ","),
-		GroupID:  computeConsumer,
-		Topic:    compute_topic,
-		MinBytes: 10e3, // 10KB
-		MaxBytes: 10e6, // 10MB
+		Brokers:       strings.Split(url, ","),
+		GroupID:       consumerGrpForTopic[compute_topic],
+		Topic:         compute_topic,
+		QueueCapacity: 1,
+		MinBytes:      10e3, // 10KB
+		MaxBytes:      10e6, // 10MB
 	})
 	defer r.Close()
 

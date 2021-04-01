@@ -55,6 +55,9 @@ func readAndChunk(writer *kafka.Writer, fromFile string) (int, bool) {
 func oneGz(writer *kafka.Writer, chunks int, url string) (int, bool) {
 	var rdr io.Reader
 	var err error
+
+	fmt.Printf("oneGz processing url %v with max chunks: %v\n", url, chunks)
+
 	if strings.HasPrefix(url, "http") {
 		log.Printf("Getting gzip: %v", url)
 		resp, err := http.Get(url)
