@@ -24,7 +24,7 @@ const (
 
 var crc32q = crc32.MakeTable(crc32.IEEE)
 
-// Writes the passed chunk to the passed writer
+// Writes the passed message to the passed writer (and therefore topic)
 func writeMessage(writer *kafka.Writer, message string) error {
 	k := fmt.Sprintf("%x", crc32.Checksum([]byte(message), crc32q))
 	if verbose {

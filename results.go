@@ -14,34 +14,26 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+// synchronize access to the in-mem results struct since it can be updated and requested
+// via separate goroutines
+var mu sync.Mutex
+
+// says how many of a given housing type was accumulated
 type HousingResult struct {
 	Description string
 	Count       int
 }
 
-var mu sync.Mutex
-
-var housingResults = map[int]HousingResult{
-	0:  {"OTHER UNIT", 0},
-	1:  {"HOUSE, APARTMENT, FLAT", 0},
-	2:  {"HU IN NONTRANSIENT HOTEL, MOTEL, ETC.", 0},
-	3:  {"HU PERMANENT IN TRANSIENT HOTEL, MOTEL", 0},
-	4:  {"HU IN ROOMING HOUSE", 0},
-	5:  {"MOBILE HOME OR TRAILER W/NO PERM. ROOM ADDED", 0},
-	6:  {"MOBILE HOME OR TRAILER W/1 OR MORE PERM. ROOMS ADDED", 0},
-	7:  {"HU NOT SPECIFIED ABOVE", 0},
-	8:  {"QUARTERS NOT HU IN ROOMING OR BRDING HS", 0},
-	9:  {"UNIT NOT PERM. IN TRANSIENT HOTL, MOTL", 0},
-	10: {"UNOCCUPIED TENT SITE OR TRLR SITE", 0},
-	11: {"STUDENT QUARTERS IN COLLEGE DORM", 0},
-	12: {"OTHER UNIT NOT SPECIFIED ABOVE", 0},
-}
+// HousingResults is a map. The main key is year. For each year, there is a map. The key of that
+// nested map is a housing code (int) and the value of the map is the description and count for that housing code
+var HousingResults = map[int]map[int]HousingResult{}
 
 // Reads from the 'results' topic indefinitely, blocking until a result is available. Each result message
-// is a comma-separated list of housing codes like: 1,1,1,6,5,1,4,1,1,1,12 etc. The function splits the message
-// into its codes, and the for each code, increments the count of the `housingResult` item in the `housingResults'
-// map whose entry is identified by the code. Invalid codes are simply ignored. Modifications to the `housingResults'
-// variable are guarded by a mutex since this data is also available for consumption via a REST endpoint.
+// is a comma-separated list of housing codes like: nnnn:1,1,1,6,5,1,4,1,1,1,12 etc. where nnnn is a year, and
+// the values are housing codes. The function splits the message into its codes, and the for each code, increments
+// the count of the `housingResult` item in the `housingResults' map whose entry is identified by the code. Invalid
+// codes are simply ignored. Modifications to the `housingResults' variable are guarded by a mutex since this data
+// is also available for consumption via a REST endpoint.
 func accumulateAndServeResults(url string, port int) {
 	go serveResults(port)
 	r := kafka.NewReader(kafka.ReaderConfig{
@@ -64,26 +56,48 @@ func accumulateAndServeResults(url string, port int) {
 			log.Printf("read message from topic: %v\n", string(m.Value))
 		}
 		if err == nil {
-			for _, code := range strings.Split(string(m.Value), ",") {
-				if intCode, err := strconv.Atoi(code); err == nil {
-					if result, ok := housingResults[intCode]; ok {
+			messageParts := strings.Split(string(m.Value), ":")
+			year, _ := strconv.Atoi(messageParts[0])
+			var housingResult map[int]HousingResult{}
+			var ok = false
+			if housingResult, ok = HousingResults[year]; !ok {
+				housingResult = addYearToHousingResults(year)
+			}
+			for _, codeStr := range strings.Split(string(messageParts[1]), ",") {
+				if code, err := strconv.Atoi(codeStr); err == nil {
+					if result, ok := housingResult[code]; ok {
 						mu.Lock()
 						result.Count++
-						housingResults[intCode] = result
+						housingResult[code] = result
 						mu.Unlock()
 					}
 					// if the code isn't valid, just ignore it
 				}
 			}
-
+			HousingResults[year] = housingResult
 		}
-		//if err := r.CommitMessages(context.Background(), m); err != nil {
-		//	log.Printf("error committing message: %v. the error was: %v\n", m.Key, err)
-		//}
-		// slow it down a tad for testing
-		//time.Sleep(500 * time.Millisecond)
 	}
 }
+
+func addYearToHousingResults(year int) map[int]HousingResult {
+	HousingResults[year] = map[int]HousingResult{
+		0:  {"OTHER UNIT", 0},
+		1:  {"HOUSE, APARTMENT, FLAT", 0},
+		2:  {"HU IN NONTRANSIENT HOTEL, MOTEL, ETC.", 0},
+		3:  {"HU PERMANENT IN TRANSIENT HOTEL, MOTEL", 0},
+		4:  {"HU IN ROOMING HOUSE", 0},
+		5:  {"MOBILE HOME OR TRAILER W/NO PERM. ROOM ADDED", 0},
+		6:  {"MOBILE HOME OR TRAILER W/1 OR MORE PERM. ROOMS ADDED", 0},
+		7:  {"HU NOT SPECIFIED ABOVE", 0},
+		8:  {"QUARTERS NOT HU IN ROOMING OR BRDING HS", 0},
+		9:  {"UNIT NOT PERM. IN TRANSIENT HOTL, MOTL", 0},
+		10: {"UNOCCUPIED TENT SITE OR TRLR SITE", 0},
+		11: {"STUDENT QUARTERS IN COLLEGE DORM", 0},
+		12: {"OTHER UNIT NOT SPECIFIED ABOVE", 0},
+	}
+	return HousingResults[year]
+}
+
 
 func serveResults(port int) {
 	r := mux.NewRouter()
@@ -100,7 +114,7 @@ func serveResults(port int) {
 
 func resultsHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
-	js, err := json.Marshal(housingResults)
+	js, err := json.Marshal(HousingResults)
 	mu.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

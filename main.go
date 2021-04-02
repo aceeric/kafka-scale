@@ -9,7 +9,7 @@ import (
 var command string
 var dryRun bool
 var stdout bool
-var quiet bool
+var writeKafka bool
 var years string
 var months string
 var kafkaBrokers string
@@ -57,7 +57,8 @@ var consumerGrpForTopic = map[string]string {
 // IP=$(kubectl -n kafka get node ham -o=jsonpath='{range .status.addresses[?(@.type == "InternalIP")]}{.address}{"\n"}')
 // PORT=$(kubectl -n kafka get svc my-cluster-kafka-external-0 -o=jsonpath='{.spec.ports[0].nodePort}{"\n"}')
 //
-// ./kafka-scale --kafka=$IP:$PORT --years=2015 --months=jan,feb --chunks 1000 read
+// ./kafka-scale --kafka=$IP:$PORT --years=2019 --months=jan,feb --chunks 1000 read
+// ./kafka-scale --years=2019 --months='*' --stdout read
 // ./kafka-scale --from-file=/home/eace/Downloads/dec20pub.dat.gz --kafka=$IP:$PORT --partitions=10 --chunks=100 read
 // ./kafka-scale --kafka=$IP:$PORT --stdout compute
 // ./kafka-scale --kafka=$IP:$PORT --verbose compute
