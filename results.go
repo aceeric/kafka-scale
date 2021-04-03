@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,10 +34,10 @@ var HousingResults = map[int]map[int]HousingResult{}
 // the count of the `housingResult` item in the `housingResults' map whose entry is identified by the code. Invalid
 // codes are simply ignored. Modifications to the `housingResults' variable are guarded by a mutex since this data
 // is also available for consumption via a REST endpoint.
-func accumulateAndServeResults(url string, port int) {
+func resultsCmd(kafkaBrokers string, port int, verbose bool) {
 	go serveResults(port)
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:       strings.Split(url, ","),
+		Brokers:       strings.Split(kafkaBrokers, ","),
 		GroupID:       consumerGrpForTopic[results_topic],
 		Topic:         results_topic,
 		QueueCapacity: 1,
@@ -47,18 +47,18 @@ func accumulateAndServeResults(url string, port int) {
 	defer r.Close()
 
 	if verbose {
-		log.Printf("beginning read message from topic: %v\n", results_topic)
+		fmt.Printf("beginning read message from topic: %v\n", results_topic)
 	}
 	for {
 		// ReadMessage blocks
 		m, err := r.ReadMessage(context.Background())
 		if verbose {
-			log.Printf("read message from topic: %v\n", string(m.Value))
+			fmt.Printf("read message from topic: %v\n", string(m.Value))
 		}
 		if err == nil {
 			messageParts := strings.Split(string(m.Value), ":")
 			year, _ := strconv.Atoi(messageParts[0])
-			var housingResult map[int]HousingResult{}
+			var housingResult map[int]HousingResult
 			var ok = false
 			if housingResult, ok = HousingResults[year]; !ok {
 				housingResult = addYearToHousingResults(year)
@@ -109,7 +109,7 @@ func serveResults(port int) {
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
-	log.Fatal(srv.ListenAndServe())
+	fmt.Printf("Metrics server terminated with result: %v\n", srv.ListenAndServe())
 }
 
 func resultsHandler(w http.ResponseWriter, r *http.Request) {

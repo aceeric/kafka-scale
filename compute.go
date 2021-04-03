@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
-	"log"
 	"strings"
 	"time"
 
@@ -14,7 +14,17 @@ import (
 // Reads from the 'compute' topic, calculates results, and writes to the 'results' topic. Blocks reading from the
 // compute topic indefinitely. So once the topic is emptied, this function will block indefinitely. On the other hand
 // since it is sitting blocking, you can add more results using the chunker and processing will just resume
-func calc(writer *kafka.Writer, url string) bool {
+func computeCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, verbose bool, writeTo string) {
+	if err := createTopicIfNotExists(kafkaBrokers, results_topic, partitionCnt, replicationFactor); err != nil {
+		fmt.Printf("error creating topic %v, error is:%v\n", results_topic, err)
+		return
+	}
+	writer := newKafkaWriter(kafkaBrokers, results_topic)
+	defer writer.Close()
+	calc(writer, kafkaBrokers, verbose, writeTo)
+}
+
+func calc(writer *kafka.Writer, url string, verbose bool, writeTo string) bool {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:       strings.Split(url, ","),
 		GroupID:       consumerGrpForTopic[compute_topic],
@@ -28,19 +38,19 @@ func calc(writer *kafka.Writer, url string) bool {
 	for {
 		// ReadMessage blocks
 		if verbose {
-			log.Printf("reading message from topic: %v\n", compute_topic)
+			fmt.Printf("reading message from topic: %v\n", compute_topic)
 		}
 		m, err := r.ReadMessage(context.Background())
 		if err != nil {
 			if err == io.EOF {
-				log.Printf("reader for topic %v has been closed\n", compute_topic)
+				fmt.Printf("reader for topic %v has been closed\n", compute_topic)
 				return false
 			}
-			log.Printf("error getting chunk from topic: %v, error is: %v\n", compute_topic, err)
+			fmt.Printf("error getting chunk from topic: %v, error is: %v\n", compute_topic, err)
 			return false
 		}
 		if verbose {
-			log.Printf("message was read. key: %v, topic: %v, part: %v, offset: %v\n", m.Key, m.Topic, m.Partition, m.Offset)
+			fmt.Printf("message was read. key: %v, topic: %v, part: %v, offset: %v\n", m.Key, m.Topic, m.Partition, m.Offset)
 		}
 		scanner := bufio.NewScanner(strings.NewReader(string(m.Value)))
 		codes := ""
@@ -63,11 +73,11 @@ func calc(writer *kafka.Writer, url string) bool {
 		}
 		// todo simulate some compute time
 		time.Sleep(100 * time.Millisecond)
-		if stdout {
-			log.Printf("codes: %v\n", codes)
-		} else if writeKafka {
-			if err := writeMessage(writer, codes); err != nil {
-				log.Printf("error writing codes to Kafka - error is: %v\n", err)
+		if writeTo == writeToStdout {
+			fmt.Printf("codes: %v\n", codes)
+		} else if writeTo == writeToKafka {
+			if err := writeMessage(writer, codes, verbose); err != nil {
+				fmt.Printf("error writing codes to Kafka - error is: %v\n", err)
 				return false
 			}
 		}

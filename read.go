@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -27,15 +26,35 @@ const gzurl = "https://www2.census.gov/programs-surveys/cps/datasets/%v/basic/%v
 //
 // In both scenarios, returns the number of chunks processed and true if success, else false if error. Also,
 // supports throttling via the package-level 'chunkCount' variable initialized from the command line.
-func readAndChunk(writer *kafka.Writer, fromFile string) (int, bool) {
+
+func readCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, fromFile string, chunkCount int,
+	yearsArr []int, monthsArr []string, writeTo string, verbose bool) {
+	var writer *kafka.Writer
+	if kafkaBrokers != "" {
+		if err := createTopicIfNotExists(kafkaBrokers, compute_topic, partitionCnt, replicationFactor); err != nil {
+			fmt.Printf("error creating topic %v, error is:%v\n", compute_topic, err)
+			return
+		}
+		writer = newKafkaWriter(kafkaBrokers, compute_topic)
+		defer writer.Close()
+	}
+	if chunks, ok := readAndChunk(writer, fromFile, chunkCount, yearsArr, monthsArr, writeTo, verbose); !ok {
+		fmt.Printf("error processing census data. %v chunks were processed before stopping\n", chunks)
+	} else {
+		fmt.Printf("no errors were encountered processing census data. %v chunks were processed\n", chunks)
+	}
+}
+
+func readAndChunk(writer *kafka.Writer, fromFile string, chunkCount int, yearsArr []int, monthsArr []string, writeTo string,
+	verbose bool) (int, bool) {
 	chunks := 0
 	var ok bool
 	if fromFile != "" {
-		return oneGz(writer, chunks, fromFile, yearsArr[0])
+		return oneGz(writer, chunkCount, chunks, fromFile, yearsArr[0], writeTo, verbose)
 	}
 	for _, year := range yearsArr {
 		for _, month := range monthsArr {
-			if chunks, ok = oneGz(writer, chunks, fmt.Sprintf(gzurl, year, month, strconv.Itoa(year)[2:]), year); !ok {
+			if chunks, ok = oneGz(writer, chunkCount, chunks, fmt.Sprintf(gzurl, year, month, strconv.Itoa(year)[2:]), year, writeTo, verbose); !ok {
 				return chunks, false
 			} else if chunkCount >= 0 && chunks >= chunkCount {
 				return chunks, true
@@ -53,38 +72,38 @@ func readAndChunk(writer *kafka.Writer, fromFile string) (int, bool) {
 //
 // Returns the cumulative number of chunks processed so far (including chunks from prior calls) and true if success,
 // else false if error. Returns if package var 'chunkCount' count is met.
-func oneGz(writer *kafka.Writer, chunks int, url string, year int) (int, bool) {
+func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year int, writeTo string, verbose bool) (int, bool) {
 	var rdr io.Reader
 	var err error
 
 	fmt.Printf("oneGz processing url %v with current value of chunks: %v\n", url, chunks)
 
 	if strings.HasPrefix(url, "http") {
-		log.Printf("Getting gzip: %v", url)
+		fmt.Printf("Getting gzip: %v", url)
 		resp, err := http.Get(url)
 		if err != nil {
-			log.Printf("error getting gzip: %v, error is: %v\n", url, err)
+			fmt.Printf("error getting gzip: %v, error is: %v\n", url, err)
 			return chunks, false
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
-			log.Printf("error getting gzip: %v, status code is: %v\n", url, resp.StatusCode)
+			fmt.Printf("error getting gzip: %v, status code is: %v\n", url, resp.StatusCode)
 			return chunks, false
 		}
 		rdr, err = gzip.NewReader(resp.Body)
 		if err != nil {
-			log.Printf("error creating gzip reader over url: %v, error is: %v\n", url, err)
+			fmt.Printf("error creating gzip reader over url: %v, error is: %v\n", url, err)
 			return chunks, false
 		}
 	} else {
 		rdr, err = os.Open(url)
 		if err != nil {
-			log.Printf("error opening file: %v, error is: %v\n", url, err)
+			fmt.Printf("error opening file: %v, error is: %v\n", url, err)
 			return chunks, false
 		}
 		rdr, err = gzip.NewReader(rdr)
 		if err != nil {
-			log.Printf("error creating gzip reader over filesystem object: %v, error is: %v\n", url, err)
+			fmt.Printf("error creating gzip reader over filesystem object: %v, error is: %v\n", url, err)
 			return chunks, false
 		}
 	}
@@ -97,11 +116,11 @@ func oneGz(writer *kafka.Writer, chunks int, url string, year int) (int, bool) {
 		cnt++
 		// chunk every ten lines
 		if cnt >= 10 {
-			if stdout {
-				log.Printf("chunk: %v\n", chunk)
-			} else if !writeKafka {
-				if err := writeMessage(writer, chunk); err != nil {
-					log.Printf("error writing chunk to Kafka - error is: %v\n", err)
+			if writeTo == writeToStdout {
+				fmt.Printf("chunk: %v\n", chunk)
+			} else if writeTo == writeToKafka {
+				if err := writeMessage(writer, chunk, verbose); err != nil {
+					fmt.Printf("error writing chunk to Kafka - error is: %v\n", err)
 					return chunks, false
 				}
 			}
@@ -109,7 +128,7 @@ func oneGz(writer *kafka.Writer, chunks int, url string, year int) (int, bool) {
 			cnt = 0
 			chunk = ""
 			if chunkCount >= 0 && chunks >= chunkCount {
-				log.Printf("chunk count met: %v. Stopping\n", chunks)
+				fmt.Printf("chunk count met: %v. Stopping\n", chunks)
 				return chunks, true
 			}
 		}

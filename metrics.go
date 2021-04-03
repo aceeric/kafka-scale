@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"time"
@@ -24,7 +24,7 @@ func startMetrics() {
 	server = &http.Server{Addr: address, Handler: promhttp.Handler()}
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			log.Fatalf("Instrumentation was unable to start Prometheus HTTP server. The error is: %v\n", err)
+			fmt.Printf("Instrumentation was unable to start Prometheus HTTP server. Metrics will not be enabled. The error is: %v\n", err)
 		}
 	}()
 }
@@ -34,7 +34,7 @@ func stopMetrics() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
-			log.Print("[ERROR] Unable to stop Prometheus HTTP")
+			fmt.Print("[ERROR] Unable to stop Prometheus HTTP")
 		}
 		server = nil
 	}

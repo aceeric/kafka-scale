@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-scale-results
+  namespace: kafka
+  labels:
+    app.kubernetes.io/name: kafka-scale-results
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      appzygy.net/name: results
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka-scale-results
+        appzygy.net/name: results
+    spec:
+      containers:
+      - name: reader
+        image: quay.io/appzygy/kafka-scale:1.0.0
+        args:
+        - --kafka=my-cluster-kafka-bootstrap:9092
+        - --verbose
+        - --port=8888
+        - results
+        resources:
+          requests:
+            memory: "20Mi"
+            cpu: "1"
+          limits:
+            memory: "40Mi"
+            cpu: "1"
+      serviceAccount: default
+      serviceAccountName: default

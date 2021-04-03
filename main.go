@@ -1,15 +1,7 @@
 package main
 
-import (
-	"log"
-
-	"github.com/segmentio/kafka-go"
-)
-
 var command string
 var dryRun bool
-var stdout bool
-var writeKafka bool
 var years string
 var months string
 var kafkaBrokers string
@@ -23,6 +15,8 @@ var topic string
 var verbose bool
 var port int
 var withMetrics bool
+var printVersion bool
+var writeTo string
 
 const (
 	// supported commands
@@ -33,16 +27,20 @@ const (
 	compute   = "compute"
 	// read the 'results' queue, summarize results into memory, serve the results as JSON via a REST call
 	results   = "results"
-	// list all topics
+	// list all topics to the console
 	topiclist = "topiclist"
 	// remove comma-separated list of topics
 	rmtopics  = "rmtopics"
-	// list offsets of one specified topic
+	// list offsets of a specified topic to the console
 	offsets   = "offsets"
 
 	// Readers of the compute topic all read as part of this consumer group
 	computeConsumer = "kafka-scale-consumer-group"
 	resultConsumer = "kafka-scale-results-consumer-group"
+
+	writeToKafka = "kafka"
+	writeToStdout = "stdout"
+	WriteToNull = "null"
 )
 
 // maps consumer groups to topics. The code always reads from a topic as part of a consumer group because
@@ -52,7 +50,7 @@ var consumerGrpForTopic = map[string]string {
 	results: resultConsumer,
 }
 
-// Usage:
+// Some example usages:
 //
 // IP=$(kubectl -n kafka get node ham -o=jsonpath='{range .status.addresses[?(@.type == "InternalIP")]}{.address}{"\n"}')
 // PORT=$(kubectl -n kafka get svc my-cluster-kafka-external-0 -o=jsonpath='{.spec.ports[0].nodePort}{"\n"}')
@@ -71,63 +69,27 @@ func main() {
 		return
 	}
 	if dryRun {
+		// print how the app interprets the command line but don't do anything
 		doDryRun()
 		return
 	}
-	withMetrics = true
 	if withMetrics {
 		startMetrics()
 		defer stopMetrics()
 	}
-	var conn *kafka.Conn
-	var writer *kafka.Writer
-	var err error
-
 	switch command {
 	case read:
-		if kafkaBrokers != "" {
-			conn, err = connectKakfa(kafkaBrokers)
-			if err != nil {
-				log.Printf("error connecting to Kafka at: %v, error is: %v\n", kafkaBrokers, err)
-				return
-			}
-			if err := createTopicIfNotExists(conn, compute_topic, partitionCnt, replicationFactor); err != nil {
-				log.Printf("error creating topic %v, error is:%v\n", compute_topic, err)
-				return
-			}
-			writer = newKafkaWriter(kafkaBrokers, compute_topic)
-			defer conn.Close()
-			defer writer.Close()
-		}
-		if chunks, ok := readAndChunk(writer, fromFile); !ok {
-			log.Printf("error processing census data. %v chunks were processed before stopping\n", chunks)
-		} else {
-			log.Printf("no errors were encountered processing census data. %v chunks were processed\n", chunks)
-		}
-		select {}
+		readCmd(kafkaBrokers, partitionCnt, replicationFactor, fromFile, chunkCount, yearsArr, monthsArr,
+			writeTo, verbose)
 	case compute:
-		conn, err = connectKakfa(kafkaBrokers)
-		if err != nil {
-			log.Printf("error connecting to Kafka at: %v, error is: %v\n", kafkaBrokers, err)
-			return
-		}
-		if err := createTopicIfNotExists(conn, results_topic, partitionCnt, replicationFactor); err != nil {
-			log.Printf("error creating topic %v, error is:%v\n", results_topic, err)
-			return
-		}
-		writer = newKafkaWriter(kafkaBrokers, results_topic)
-		defer conn.Close()
-		defer writer.Close()
-		calc(writer, kafkaBrokers)
-		select {}
-
+		computeCmd(kafkaBrokers, partitionCnt, replicationFactor, verbose, writeTo)
 	case results:
-		accumulateAndServeResults(kafkaBrokers, port)
+		resultsCmd(kafkaBrokers, port, verbose)
 	case topiclist:
-		getTopics(kafkaBrokers)
+		topicListCmd(kafkaBrokers)
 	case offsets:
-		listOffsets(kafkaBrokers, topic)
+		offsetsCmd(kafkaBrokers, topic)
 	case rmtopics:
-		deleteTopics(kafkaBrokers, topic)
+		rmTopicsCmd(kafkaBrokers, topic)
 	}
 }

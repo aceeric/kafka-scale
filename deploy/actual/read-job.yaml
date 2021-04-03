@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-scale-read
+  namespace: kafka
+  labels:
+    app.kubernetes.io/name: kafka-scale-read
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka-scale-read
+        appzygy.net/name: results
+    spec:
+      containers:
+      - name: read
+        image: quay.io/appzygy/kafka-scale:1.0.0
+        args:
+        - --kafka=my-cluster-kafka-bootstrap:9092
+        - --verbose
+        - --years=2018,2019
+        - --months='*'
+        - read
+        resources:
+          requests:
+            memory: "20Mi"
+            cpu: "1"
+          limits:
+            memory: "40Mi"
+            cpu: "1"
+      restartPolicy: Never
+      serviceAccount: default
+      serviceAccountName: default
+  backoffLimit: 4

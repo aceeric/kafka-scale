@@ -1,0 +1,26 @@
+# This is a simple smoke test. It can be used as longs as Kafka is running. It simply lists the Kafka
+# topics and then exits. The Pod is set to not restart. After deploying the pod, view the pod logs. If the logs
+# show no errors and a correct topic list, then you've validated Kafka connectivity from the kakfa-scale
+# app in cluster.
+apiVersion: v1
+kind: Pod
+metadata:
+    name: kafka-scale
+    namespace: kafka
+spec:
+  containers:
+  - name: kafka-scale
+    args:
+      - --kafka=my-cluster-kafka-bootstrap:9092
+      - topiclist
+    image: quay.io/appzygy/kafka-scale:1.0.0
+    resources:
+      requests:
+        memory: "20Mi"
+        cpu: "1"
+      limits:
+        memory: "40Mi"
+        cpu: "1"
+  restartPolicy: Never
+  serviceAccount: default
+  serviceAccountName: default

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"hash/crc32"
-	"log"
 	"net"
 	"sort"
 	"strconv"
@@ -25,10 +24,10 @@ const (
 var crc32q = crc32.MakeTable(crc32.IEEE)
 
 // Writes the passed message to the passed writer (and therefore topic)
-func writeMessage(writer *kafka.Writer, message string) error {
+func writeMessage(writer *kafka.Writer, message string, verbose bool) error {
 	k := fmt.Sprintf("%x", crc32.Checksum([]byte(message), crc32q))
 	if verbose {
-		log.Printf("writing message with key %v to topic %v\n", k, writer.Topic)
+		fmt.Printf("writing message with key %v to topic %v\n", k, writer.Topic)
 	}
 	err := writer.WriteMessages(context.Background(),
 		kafka.Message{
@@ -37,17 +36,22 @@ func writeMessage(writer *kafka.Writer, message string) error {
 		},
 	)
 	if err != nil {
-		log.Printf("error writing message, error is: %v\n", err)
+		fmt.Printf("error writing message, error is: %v\n", err)
 		return err
 	}
 	return nil
 }
 
 // Creates a topic if it does not already exist. If topic exists, then no change is made to Kafka
-func createTopicIfNotExists(conn *kafka.Conn, topic string, partitionCnt int, replFactorCnt int) error {
+func createTopicIfNotExists(kafkaBrokers string, topic string, partitionCnt int, replFactorCnt int) error {
+	conn, err := connectKakfa(kafkaBrokers)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
 	partitions, err := conn.ReadPartitions()
 	if err != nil {
-		log.Printf("error reading partitions. error is: %v\n", err)
+		fmt.Printf("error reading partitions. error is: %v\n", err)
 		return err
 	}
 	for _, p := range partitions {
@@ -58,13 +62,13 @@ func createTopicIfNotExists(conn *kafka.Conn, topic string, partitionCnt int, re
 	}
 	controller, err := conn.Controller()
 	if err != nil {
-		log.Printf("error getting controller. error is: %v\n", err)
+		fmt.Printf("error getting controller. error is: %v\n", err)
 		return err
 	}
 	var controllerConn *kafka.Conn
 	controllerConn, err = kafka.Dial("tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
 	if err != nil {
-		log.Printf("error getting controller connection. error is: %v\n", err)
+		fmt.Printf("error getting controller connection. error is: %v\n", err)
 		return err
 	}
 	defer controllerConn.Close()
@@ -77,22 +81,22 @@ func createTopicIfNotExists(conn *kafka.Conn, topic string, partitionCnt int, re
 	}
 	err = controllerConn.CreateTopics(topicConfigs...)
 	if err != nil {
-		log.Printf("error creating topic. error is: %v\n", err)
+		fmt.Printf("error creating topic. error is: %v\n", err)
 		return err
 	}
 	return nil
 }
 
 // Lists the topics in kafka to the console, sorted by partition name and then ID
-func getTopics(url string) {
-	conn, err := connectKakfa(url)
+func topicListCmd(kafkaBrokers string) {
+	conn, err := connectKakfa(kafkaBrokers)
 	if err != nil {
-		log.Printf("error connecting to Kafka url: %v, error is: %v\n", url, err)
+		return
 	}
 	defer conn.Close()
 	partitions, err := conn.ReadPartitions()
 	if err != nil {
-		log.Printf("error reading partitions. error is: %v\n", err)
+		fmt.Printf("error reading partitions. error is: %v\n", err)
 		return
 	}
 	sort.Slice(partitions[:], func(i, j int) bool {
@@ -117,16 +121,15 @@ func getTopics(url string) {
 }
 
 // Gets all the partition IDs for a topic as an array of int, sorted ascending
-func getPartitionsForTopic(url string, topic string) ([]int, error) {
-	conn, err := connectKakfa(url)
+func getPartitionsForTopic(kafkaBrokers string, topic string) ([]int, error) {
+	conn, err := connectKakfa(kafkaBrokers)
 	if err != nil {
-		log.Printf("error connecting to Kafka url: %v, error is: %v\n", url, err)
 		return nil, err
 	}
 	defer conn.Close()
 	partitions, err := conn.ReadPartitions()
 	if err != nil {
-		log.Printf("error reading partitions. error is: %v\n", err)
+		fmt.Printf("error reading partitions. error is: %v\n", err)
 		return nil, err
 	}
 	var topicPartitions []int
@@ -140,8 +143,8 @@ func getPartitionsForTopic(url string, topic string) ([]int, error) {
 }
 
 // deletes the passed topics. Supports testing. Topics is a comma-separated list of topics. E.g.: "footopic,bartopic"
-func deleteTopics(url string, topics string) {
-	client, shutdown := newClient(kafka.TCP(url))
+func rmTopicsCmd(kafkaBrokers string, topics string) {
+	client, shutdown := newClient(kafka.TCP(kafkaBrokers))
 	defer shutdown()
 
 	topicArray := strings.Split(topics, ",")
@@ -149,24 +152,24 @@ func deleteTopics(url string, topics string) {
 		Topics: topicArray,
 	})
 	if err != nil {
-		log.Printf("error deleting topics: %v, error is: %v\n", topics, err)
+		fmt.Printf("error deleting topics: %v, error is: %v\n", topics, err)
 		return
 	}
 	for _, topic := range topicArray {
 		if err := res.Errors[topic]; err != nil {
-			log.Printf("error deleting topic: %v, error is: %v\n", topic, err)
+			fmt.Printf("error deleting topic: %v, error is: %v\n", topic, err)
 		}
 	}
 }
 
 // Lists the offsets for all partitions in the passed topic to the console.
-func listOffsets(url string, topic string) {
-	partitions, err := getPartitionsForTopic(url, topic)
+func offsetsCmd(kafkaBrokers string, topic string) {
+	partitions, err := getPartitionsForTopic(kafkaBrokers, topic)
 	if err != nil {
-		log.Printf("error getting partitions for topic: %v, error is: %v\n", topic, err)
+		fmt.Printf("error getting partitions for topic: %v, error is: %v\n", topic, err)
 		return
 	}
-	client, shutdown := newClient(kafka.TCP(url))
+	client, shutdown := newClient(kafka.TCP(kafkaBrokers))
 	defer shutdown()
 
 	// first get "Committed"
@@ -177,7 +180,7 @@ func listOffsets(url string, topic string) {
 		},
 	})
 	if err != nil {
-		log.Printf("error fetching offsets for topic: %v, error is: %v\n", topic, err)
+		fmt.Printf("error fetching offsets for topic: %v, error is: %v\n", topic, err)
 		return
 	}
 	type offsetInfo = struct {committed int; last int}
@@ -200,12 +203,12 @@ func listOffsets(url string, topic string) {
 		},
 	})
 	if err != nil {
-		log.Printf("error listing offsets for topic: %v, error is: %v\n", url, err)
+		fmt.Printf("error listing offsets for topic: %v, error is: %v\n", kafkaBrokers, err)
 		return
 	}
 	partitionOffsets, ok := res.Topics[topic]
 	if !ok {
-		log.Printf("error getting partition offsets for topic: %v, error is: %v\n", url, err)
+		fmt.Printf("error getting partition offsets for topic: %v, error is: %v\n", kafkaBrokers, err)
 		return
 	}
 
@@ -236,9 +239,9 @@ func listOffsets(url string, topic string) {
 //
 
 // Creates and returns a new Kafka writer for the passed topic
-func newKafkaWriter(url string, topic string) *kafka.Writer {
+func newKafkaWriter(kafkaBrokers string, topic string) *kafka.Writer {
 	return &kafka.Writer{
-		Addr:      kafka.TCP(url),
+		Addr:      kafka.TCP(kafkaBrokers),
 		Topic:     topic,
 		BatchSize: 1,
 		Balancer:  &kafka.LeastBytes{},
@@ -247,10 +250,10 @@ func newKafkaWriter(url string, topic string) *kafka.Writer {
 }
 
 // Creates and returns a connection to Kafka
-func connectKakfa(url string) (*kafka.Conn, error) {
-	conn, err := kafka.Dial("tcp", url)
+func connectKakfa(kafkaBrokers string) (*kafka.Conn, error) {
+	conn, err := kafka.Dial("tcp", kafkaBrokers)
 	if err != nil {
-		log.Printf("error connecting to Kafka url: %v, error is: %v\n", url, err)
+		fmt.Printf("error connecting to Kafka url: %v, error is: %v\n", kafkaBrokers, err)
 		return nil, err
 	}
 	return conn, nil

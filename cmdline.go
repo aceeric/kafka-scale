@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -15,26 +15,36 @@ func init() {
 	flag.StringVar(&kafkaBrokers, "kafka", "", "Kafka broker URLs. E.g. 192.168.0.45:32355,192.168.0.46:32355,192.168.0.47:32355")
 	flag.IntVar(&chunkCount, "chunks", -1, "Chunk count - the number of chunks of 'dataSrc' to read or calculate. If omitted, or -1, then all")
 	flag.BoolVar(&dryRun, "dry-run", false, "Displays how the command would run, but doesn't actually run it")
-	flag.BoolVar(&stdout, "stdout", false, "Instead of writing to Kafka, write the stdout. Overrides 'write-kafka'")
-	flag.BoolVar(&writeKafka, "write-kafka", true, "Write to Kafka. Defaults true. For debugging, set to false to disable writing to the Kafka topics")
+	flag.StringVar(&writeTo, "write-to", writeToKafka, "Where to send the output of the read and compute commands. Defaults to 'kafka'. Valid values are : 'kafka', 'stdout', and 'null'")
 	flag.IntVar(&partitionCnt, "partitions", 1, "Partitions for the compute topic. Defaults to 1. Tune to the number of compute pods")
-	flag.IntVar(&replicationFactor, "replication-factor", 1, "Replication factor. Defaults to 1. Tune to your cluster size")
+	flag.IntVar(&replicationFactor, "replication-factor", 1, "Replication factor for the compute topic. Defaults to 1. Tune to your Kafka cluster size")
 	flag.StringVar(&fromFile, "from-file", "", "FQPN of census file to load (i.e. don't download from the census site - use a file on the filesystem)")
 	flag.StringVar(&topic, "topic", "", "If listing offsets, this is the topic for which to list offsets. If deleting topics, this is a comma-separated list of topics to delete")
 	flag.BoolVar(&verbose, "verbose", false, "Prints verbose diagnostic messages")
 	flag.IntVar(&port, "port", 8888, "REST endpoint port for results - defaults to 8888")
 	flag.BoolVar(&withMetrics, "with-metrics", false, "Enables Prometheus metrics exposition on port 9090")
+	flag.BoolVar(&printVersion, "version", false, "Prints the version number and exits")
 }
 
 var validCommands = []string {read, compute, results, topiclist, offsets, rmtopics}
+
+var version = "1.0.0"
 
 // Validate the command line
 func validateCmdline() bool {
 	flag.Parse()
 	tmp := flag.Args()
 
-	if len(tmp) != 1 {
-		log.Printf("invalid command: %v\n", tmp)
+	if len(os.Args) == 1 || printVersion {
+		fmt.Printf("kakfa-scale version: %v\n", version)
+		return false
+	}
+
+	if len(tmp) == 0 {
+		fmt.Printf("no command specified\n")
+		return false
+	} else if len(tmp) != 1 {
+		fmt.Printf("only one command supported: %v\n", tmp)
 		return false
 	} else {
 		for _, cmd := range validCommands {
@@ -44,32 +54,35 @@ func validateCmdline() bool {
 			}
 		}
 		if command == "" {
-			log.Printf("invalid command: %v\n", tmp)
+			fmt.Printf("unknown command: %v\n", tmp)
 			return false
 		}
 	}
-	// stdout means write to stdout not to Kafka
-	if stdout {
-		writeKafka = false
+	if writeTo != writeToKafka && writeTo != writeToStdout && writeTo != WriteToNull {
+		fmt.Printf("unknown value %v for --write-to\n", writeTo)
+		return false
 	}
 	needKafkaUrl := false
-	if (command == results || command == rmtopics || command == topiclist || command == compute) || (command == read && writeKafka) {
+	if (command == results || command == rmtopics || command == topiclist || command == compute) || (command == read && writeTo == writeToKafka) {
 		needKafkaUrl = true
 	}
 	if needKafkaUrl && kafkaBrokers == "" {
-		log.Printf("need Kafka cluster broker URL(s)\n")
+		fmt.Printf("need Kafka cluster broker URL(s)\n")
 		return false
 	} else if command == read && fromFile == "" && (years == "" || months == "") {
-		log.Printf("if command is 'read' then '--years' and '--months' are both required\n")
+		fmt.Printf("if command is 'read' then '--years' and '--months' are both required\n")
 		return false
 	} else if command == read && fromFile != "" && years == "" {
-		log.Printf("if command is 'read' and --from-file is specified, then '--years' is required with one value like --years=2018 - that being the year of the file\n")
+		fmt.Printf("if command is 'read' and --from-file is specified, then '--years' is required with one value like --years=2018 - that being the year of the file\n")
 		return false
 	} else if months != "" && !parseMonths() {
-		log.Printf("Can't parse months: %v. Must be comma-separated and abbreviated like '--months=jan,feb,mar' etc. ('*' is also allowed)\n", months)
+		fmt.Printf("Can't parse months: %v. Must be comma-separated and abbreviated like '--months=jan,feb,mar' etc. ('*' is also allowed)\n", months)
 		return false
 	} else if years != "" && !parseYears() {
-		log.Printf("Can't parse years: %v. Must be comma-separated and each year between 1970 and 2020 inclusive like --years=2019,2020\n", years)
+		fmt.Printf("Can't parse years: %v. Must be comma-separated and each year between 1970 and 2020 inclusive like --years=2019,2020\n", years)
+		return false
+	} else if (command == rmtopics || command == offsets) && topic == "" {
+		fmt.Printf("Must specify --topic with 'rmtopics' nad 'offsets' commands\n")
 		return false
 	}
 	return true
@@ -87,14 +100,11 @@ func doDryRun() {
 		fmt.Printf("Year: %v\n", yearsArr)
 	}
 	if command == read || command == compute {
-		if writeKafka {
-			fmt.Printf("Kafka bootstrap URL: %v\n", kafkaBrokers)
-			fmt.Printf("Partitions: %v\n", partitionCnt)
-			fmt.Printf("Replication Factor: %v\n", replicationFactor)
-		} else if stdout {
-			fmt.Printf("Write to stdout rather than writing to Kafka\n")
-		} else {
-			fmt.Printf("Don't write to Kafka or stdout (silently discard the outputs)\n")
+		fmt.Printf("Write to: %v\n", writeTo)
+		fmt.Printf("Kafka bootstrap URL: %v\n", kafkaBrokers)
+		if command == read && writeTo == writeToKafka {
+			fmt.Printf("Compute Topic Partitions: %v\n", partitionCnt)
+			fmt.Printf("Compute Topic Replication Factor: %v\n", replicationFactor)
 		}
 	}
 	if command == results {
@@ -105,7 +115,7 @@ func doDryRun() {
 		fmt.Printf("Topic: %v\n", topic)
 	}
 	if command == read || command == compute || command == results {
-		fmt.Printf("With metrics exposition: %v\n", withMetrics)
+		fmt.Printf("Metrics exposition: %v\n", withMetrics)
 	}
 }
 
