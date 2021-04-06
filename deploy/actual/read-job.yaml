@@ -10,17 +10,26 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: kafka-scale-read
-        appzygy.net/name: results
+        appzygy.net/name: read
+        appzygy.net/observable: "true"
     spec:
       containers:
       - name: read
         image: quay.io/appzygy/kafka-scale:1.0.0
+        imagePullPolicy: Always
         args:
         - --kafka=my-cluster-kafka-bootstrap:9092
         - --verbose
         - --years=2018,2019
-        - --months='*'
+        - --months=*
+        - --with-metrics
+        - --compute-topic-partitions=10
+        - --compute-topic-replfactor=1
+        - --metrics-port=9123
         - read
+        ports:
+        - name: metrics
+          containerPort: 9123
         resources:
           requests:
             memory: "20Mi"

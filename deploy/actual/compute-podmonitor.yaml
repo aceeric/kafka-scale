@@ -1,0 +1,11 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kafka-scale-compute
+  namespace: kafka
+spec:
+  selector:
+    matchLabels:
+      appzygy.net/observable: "true"
+  podMetricsEndpoints:
+  - port: metrics

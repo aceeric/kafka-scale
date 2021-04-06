@@ -13,7 +13,7 @@ import (
 
 // Reads from the 'compute' topic, calculates results, and writes to the 'results' topic. Blocks reading from the
 // compute topic indefinitely. So once the topic is emptied, this function will block indefinitely. On the other hand
-// since it is sitting blocking, you can add more results using the chunker and processing will just resume
+// since it is sitting blocking, you can add more results using the read command and processing here will just resume
 func computeCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, verbose bool, writeTo string) {
 	if err := createTopicIfNotExists(kafkaBrokers, results_topic, partitionCnt, replicationFactor); err != nil {
 		fmt.Printf("error creating topic %v, error is:%v\n", results_topic, err)
@@ -49,6 +49,7 @@ func calc(writer *kafka.Writer, url string, verbose bool, writeTo string) bool {
 			fmt.Printf("error getting chunk from topic: %v, error is: %v\n", compute_topic, err)
 			return false
 		}
+		computeMessagesRead.Inc()
 		if verbose {
 			fmt.Printf("message was read. key: %v, topic: %v, part: %v, offset: %v\n", m.Key, m.Topic, m.Partition, m.Offset)
 		}
@@ -63,7 +64,7 @@ func calc(writer *kafka.Writer, url string, verbose bool, writeTo string) bool {
 			// the message)
 			line := scanner.Text()
 			if lineCnt == 0 {
-				// first line is the year so we'
+				// first line is the year
 				codes = strings.TrimSpace(line) + ":"
 			} else {
 				codes += separator + strings.TrimSpace(line[30:32])
@@ -73,6 +74,9 @@ func calc(writer *kafka.Writer, url string, verbose bool, writeTo string) bool {
 		}
 		// todo simulate some compute time
 		time.Sleep(100 * time.Millisecond)
+		if verbose {
+			fmt.Printf("Message: %v\n", codes)
+		}
 		if writeTo == writeToStdout {
 			fmt.Printf("codes: %v\n", codes)
 		} else if writeTo == writeToKafka {
@@ -80,6 +84,7 @@ func calc(writer *kafka.Writer, url string, verbose bool, writeTo string) bool {
 				fmt.Printf("error writing codes to Kafka - error is: %v\n", err)
 				return false
 			}
+			resultMessagesWritten.Inc()
 		}
 	}
 }

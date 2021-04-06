@@ -45,6 +45,8 @@ func readCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, fromF
 	}
 }
 
+// reads from the passed file it not "" or builds census data urls to read from. Either way, reads the gzip
+// and writes to the passed writer
 func readAndChunk(writer *kafka.Writer, fromFile string, chunkCount int, yearsArr []int, monthsArr []string, writeTo string,
 	verbose bool) (int, bool) {
 	chunks := 0
@@ -79,7 +81,7 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 	fmt.Printf("oneGz processing url %v with current value of chunks: %v\n", url, chunks)
 
 	if strings.HasPrefix(url, "http") {
-		fmt.Printf("Getting gzip: %v", url)
+		fmt.Printf("Getting gzip: %v\n", url)
 		resp, err := http.Get(url)
 		if err != nil {
 			fmt.Printf("error getting gzip: %v, error is: %v\n", url, err)
@@ -95,6 +97,7 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 			fmt.Printf("error creating gzip reader over url: %v, error is: %v\n", url, err)
 			return chunks, false
 		}
+		downloadedGzips.Inc()
 	} else {
 		rdr, err = os.Open(url)
 		if err != nil {
@@ -108,6 +111,8 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 		}
 	}
 	scanner := bufio.NewScanner(rdr)
+	// insert a line as the first line of each chunk - the entire contents of the line is the value of the year
+	// e.g. "2019\n"
 	chunk := strconv.Itoa(year) + "\n"
 	cnt := 0
 	for scanner.Scan() {
@@ -123,6 +128,7 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 					fmt.Printf("error writing chunk to Kafka - error is: %v\n", err)
 					return chunks, false
 				}
+				chunksWritten.Inc()
 			}
 			chunks++
 			cnt = 0

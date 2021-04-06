@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"time"
 
@@ -12,19 +11,28 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var TestCounter Counter
-var TestCounterVec CounterVec
-var TestGauge Gauge
-var TestGaugeVec GaugeVec
+var downloadedGzips Counter
+var chunksWritten Counter
+var computeMessagesRead Counter
+var resultMessagesWritten Counter
+var resultMessagesRead Counter
+
+// these are just to have handy to clone
+//var TestCounterVec CounterVec
+//var TestGauge Gauge
+//var TestGaugeVec GaugeVec
+
 var server *http.Server
 
-const address = ":9090"
+func init() {
+	initMetrics()
+}
 
 func startMetrics() {
-	server = &http.Server{Addr: address, Handler: promhttp.Handler()}
+	server = &http.Server{Addr: ":" + MetricsPort, Handler: promhttp.Handler()}
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			fmt.Printf("Instrumentation was unable to start Prometheus HTTP server. Metrics will not be enabled. The error is: %v\n", err)
+			fmt.Printf("instrumentation was unable to start the Prometheus HTTP server. Metrics will not be enabled. The error is: %v\n", err)
 		}
 	}()
 }
@@ -34,23 +42,78 @@ func stopMetrics() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
-			fmt.Print("[ERROR] Unable to stop Prometheus HTTP")
+			fmt.Print("instrumentation was unable to stop the Prometheus HTTP server")
 		}
 		server = nil
 	}
 }
 
-func testMetrics() {
-	for  i := 0; i < 10000; i++ {
-		TestCounter.Inc()
-		TestCounterVec.With(prometheus.Labels{"thread": "t1"}).Inc()
-		TestCounterVec.With(prometheus.Labels{"thread": "t2"}).Inc()
-		TestGauge.Set(rand.Float64())
-		TestGaugeVec.With(prometheus.Labels{"thread": "t1"}).Set(rand.Float64())
-		TestGaugeVec.With(prometheus.Labels{"thread": "t2"}).Set(rand.Float64())
-		time.Sleep(500 * time.Millisecond)
-	}
+//func testMetrics() {
+//	for i := 0; i < 10000; i++ {
+//		TestCounterVec.With(prometheus.Labels{"thread": "t1"}).Inc()
+//		TestCounterVec.With(prometheus.Labels{"thread": "t2"}).Inc()
+//		TestGauge.Set(rand.Float64())
+//		TestGaugeVec.With(prometheus.Labels{"thread": "t1"}).Set(rand.Float64())
+//		TestGaugeVec.With(prometheus.Labels{"thread": "t2"}).Set(rand.Float64())
+//		time.Sleep(500 * time.Millisecond)
+//	}
+//}
+
+func initMetrics() {
+	downloadedGzips = NewCounter(
+		prometheus.CounterOpts{
+			Name: "kafka_scale_downloaded_gzips",
+			Help: "The Count of census gzip files downloaded from the US Census website",
+		},
+	)
+	chunksWritten = NewCounter(
+		prometheus.CounterOpts{
+			Name: "kafka_scale_chunks_written",
+			Help: fmt.Sprintf("The Count of Census data chunks written by the read command to the %v topic", compute_topic),
+		},
+	)
+	computeMessagesRead = NewCounter(
+		prometheus.CounterOpts{
+			Name: "kafka_scale_compute_messages_read",
+			Help: fmt.Sprintf("The Count of messages read by the compute command from the %v topic", compute_topic),
+		},
+	)
+	resultMessagesWritten = NewCounter(
+		prometheus.CounterOpts{
+			Name: "kafka_scale_result_messages_written",
+			Help: fmt.Sprintf("The Count of messages written by the compute command to the %v topic", results_topic),
+		},
+	)
+	resultMessagesRead = NewCounter(
+		prometheus.CounterOpts{
+			Name: "kafka_scale_result_messages_read",
+			Help: fmt.Sprintf("The Count of messages read by the result command from the %v topic", results_topic),
+		},
+	)
+
+	//TestCounterVec = NewCounterVec(
+	//	prometheus.CounterOpts{
+	//		Name: "test_counter_vec",
+	//		Help: "Test Counter Vec",
+	//	},
+	//	[]string{"thread"},
+	//)
+	//TestGauge = NewGauge(
+	//	prometheus.GaugeOpts{
+	//		Name: "test_gauge",
+	//		Help: "Test Gauge",
+	//	},
+	//)
+	//TestGaugeVec = NewGaugeVec(
+	//	prometheus.GaugeOpts{
+	//		Name: "test_gauge_vec",
+	//		Help: "Test Gauge Vec",
+	//	},
+	//	[]string{"thread"},
+	//)
 }
+
+// below is the thin interface layer to prometheus metrics
 
 type Counter interface {
 	Inc()
@@ -82,40 +145,6 @@ func (cv *promGaugeVec) With(labels prometheus.Labels) Gauge {
 
 func (cv *promCounterVec) With(labels prometheus.Labels) Counter {
 	return cv.vec.With(labels)
-}
-
-func init() {
-	InitMetrics()
-}
-
-func InitMetrics() {
-	TestCounter = NewCounter(
-		prometheus.CounterOpts{
-			Name: "test_counter",
-			Help: "Test Counter",
-		},
-	)
-	TestCounterVec = NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "test_counter_vec",
-			Help: "Test Counter Vec",
-		},
-		[]string{"thread"},
-	)
-
-	TestGauge = NewGauge(
-		prometheus.GaugeOpts{
-			Name: "test_gauge",
-			Help: "Test Gauge",
-		},
-	)
-	TestGaugeVec = NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "test_gauge_vec",
-			Help: "Test Gauge Vec",
-		},
-		[]string{"thread"},
-	)
 }
 
 func NewCounter(opts prometheus.CounterOpts) Counter {

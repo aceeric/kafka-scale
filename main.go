@@ -15,6 +15,7 @@ var topic string
 var verbose bool
 var port int
 var withMetrics bool
+var MetricsPort string
 var printVersion bool
 var writeTo string
 
@@ -55,12 +56,12 @@ var consumerGrpForTopic = map[string]string {
 // IP=$(kubectl -n kafka get node ham -o=jsonpath='{range .status.addresses[?(@.type == "InternalIP")]}{.address}{"\n"}')
 // PORT=$(kubectl -n kafka get svc my-cluster-kafka-external-0 -o=jsonpath='{.spec.ports[0].nodePort}{"\n"}')
 //
-// ./kafka-scale --kafka=$IP:$PORT --years=2019 --months=jan,feb --chunks 1000 read
+// ./kafka-scale --kafka=$IP:$PORT --years=2018,2019 --months=jan --compute-topic-partitions=10 --verbose read
 // ./kafka-scale --years=2019 --months='*' --stdout read
-// ./kafka-scale --from-file=/home/eace/Downloads/dec20pub.dat.gz --kafka=$IP:$PORT --partitions=10 --chunks=100 read
+// ./kafka-scale --kafka=$IP:$PORT --from-file=/home/eace/Downloads/dec20pub.dat.gz --years=2019 --compute-topic-partitions=10 --chunks=100 read
 // ./kafka-scale --kafka=$IP:$PORT --stdout compute
 // ./kafka-scale --kafka=$IP:$PORT --verbose compute
-// ./kafka-scale --kafka=$IP:$PORT --verbose results
+// ./kafka-scale --kafka=$IP:$PORT --verbose --port=8888 results
 // ./kafka-scale --kafka=$IP:$PORT topiclist
 // ./kafka-scale --kafka=$IP:$PORT --topic=compute offsets
 // ./kafka-scale --kafka=$IP:$PORT --topic=compute,result rmtopics

@@ -5,20 +5,23 @@ IMAGE_ORG      := appzygy
 IMAGE_NAME     := kafka-scale
 IMAGE          := $(IMAGE_REGISTRY)/$(IMAGE_ORG)/$(IMAGE_NAME):$(APP_VERSION)
 
-.PHONY : all
-all: build
+# containerized build and push for in-cluster deployment
+.PHONY : quay
+quay: podman-build podman-push
 
-.PHONY : build
-build:
+# desktop build for desktop testing
+.PHONY : local-build
+local-build:
 	go mod tidy
 	CGO_ENABLED=0 GO111MODULE=auto go build -ldflags "-X 'main.APP_VERSION=${APP_VERSION}'"\
     -a -o $(ROOT)/kafka-scale github.com/aceeric/kafka-scale
 
-# this target does a containerized build and pushes to quay.io
+# containerized build
 .PHONY : podman-build
 podman-build:
-	podman build . -t $(IMAGE) --build-arg APP_VERSION=$(APP_VERSION)
+	podman build . -t $(IMAGE) --build-arg APP_VERSION=$(APP_VERSION) --file ./Dockerfile
 
-.PHONY : push
-push:
+# push to quay
+.PHONY : podman-push
+podman-push:
 	podman push $(IMAGE)

@@ -53,33 +53,34 @@ func resultsCmd(kafkaBrokers string, port int, verbose bool) {
 		// ReadMessage blocks
 		m, err := r.ReadMessage(context.Background())
 		if verbose {
-			fmt.Printf("read message from topic: %v\n", string(m.Value))
+			fmt.Printf("read message from topic %v - message: %v\n", results_topic, string(m.Value))
 		}
+		resultMessagesRead.Inc()
 		if err == nil {
 			messageParts := strings.Split(string(m.Value), ":")
 			year, _ := strconv.Atoi(messageParts[0])
 			var housingResult map[int]HousingResult
 			var ok = false
 			if housingResult, ok = HousingResults[year]; !ok {
-				housingResult = addYearToHousingResults(year)
+				housingResult = newHousingResults(year)
 			}
 			for _, codeStr := range strings.Split(string(messageParts[1]), ",") {
 				if code, err := strconv.Atoi(codeStr); err == nil {
 					if result, ok := housingResult[code]; ok {
-						mu.Lock()
 						result.Count++
 						housingResult[code] = result
-						mu.Unlock()
 					}
 					// if the code isn't valid, just ignore it
 				}
 			}
+			mu.Lock()
 			HousingResults[year] = housingResult
+			mu.Unlock()
 		}
 	}
 }
 
-func addYearToHousingResults(year int) map[int]HousingResult {
+func newHousingResults(year int) map[int]HousingResult {
 	HousingResults[year] = map[int]HousingResult{
 		0:  {"OTHER UNIT", 0},
 		1:  {"HOUSE, APARTMENT, FLAT", 0},
@@ -98,28 +99,34 @@ func addYearToHousingResults(year int) map[int]HousingResult {
 	return HousingResults[year]
 }
 
-
 func serveResults(port int) {
+	fmt.Printf("Starting http server on port: %v\n", port)
+
 	r := mux.NewRouter()
 	r.HandleFunc("/results", resultsHandler)
 
+	// address can't be loopback - does not work in cluster - possibly I need to configure the pod
+	// networking to handle that? Anyway - the ":PORT" form used below works
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         "127.0.0.1:" + strconv.Itoa(port),
+		Addr:         ":" + strconv.Itoa(port),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
-	fmt.Printf("Metrics server terminated with result: %v\n", srv.ListenAndServe())
+	fmt.Printf("Results server terminated with result: %v\n", srv.ListenAndServe())
 }
 
 func resultsHandler(w http.ResponseWriter, r *http.Request) {
+	if verbose {
+		fmt.Printf("Http response handler invoked\n")
+	}
 	mu.Lock()
 	js, err := json.Marshal(HousingResults)
-	mu.Unlock()
+	defer mu.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	_, _ = w.Write(js)
 }

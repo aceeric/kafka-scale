@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: kafka-scale-compute
 spec:
-  replicas: 10
+  replicas: 2
   selector:
     matchLabels:
       appzygy.net/name: compute
@@ -15,14 +15,21 @@ spec:
       labels:
         app.kubernetes.io/name: kafka-scale-compute
         appzygy.net/name: compute
+        appzygy.net/observable: "true"
     spec:
       containers:
       - name: reader
         image: quay.io/appzygy/kafka-scale:1.0.0
+        imagePullPolicy: Always
         args:
         - --kafka=my-cluster-kafka-bootstrap:9092
         - --verbose
+        - --with-metrics
+        - --metrics-port=9123
         - compute
+        ports:
+        - name: metrics
+          containerPort: 9123
         resources:
           requests:
             memory: "20Mi"

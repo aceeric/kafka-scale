@@ -16,13 +16,14 @@ func init() {
 	flag.IntVar(&chunkCount, "chunks", -1, "Chunk count - the number of chunks of 'dataSrc' to read or calculate. If omitted, or -1, then all")
 	flag.BoolVar(&dryRun, "dry-run", false, "Displays how the command would run, but doesn't actually run it")
 	flag.StringVar(&writeTo, "write-to", writeToKafka, "Where to send the output of the read and compute commands. Defaults to 'kafka'. Valid values are : 'kafka', 'stdout', and 'null'")
-	flag.IntVar(&partitionCnt, "partitions", 1, "Partitions for the compute topic. Defaults to 1. Tune to the number of compute pods")
-	flag.IntVar(&replicationFactor, "replication-factor", 1, "Replication factor for the compute topic. Defaults to 1. Tune to your Kafka cluster size")
+	flag.IntVar(&partitionCnt, "compute-topic-partitions", 1, "Partitions for the compute topic. Defaults to 1. Tune to the number of compute pods")
+	flag.IntVar(&replicationFactor, "compute-topic-replfactor", 1, "Replication factor for the compute topic. Defaults to 1. Tune to your Kafka cluster size")
 	flag.StringVar(&fromFile, "from-file", "", "FQPN of census file to load (i.e. don't download from the census site - use a file on the filesystem)")
 	flag.StringVar(&topic, "topic", "", "If listing offsets, this is the topic for which to list offsets. If deleting topics, this is a comma-separated list of topics to delete")
 	flag.BoolVar(&verbose, "verbose", false, "Prints verbose diagnostic messages")
 	flag.IntVar(&port, "port", 8888, "REST endpoint port for results - defaults to 8888")
-	flag.BoolVar(&withMetrics, "with-metrics", false, "Enables Prometheus metrics exposition on port 9090")
+	flag.BoolVar(&withMetrics, "with-metrics", false, "Enables Prometheus metrics exposition")
+	flag.StringVar(&MetricsPort, "metrics-port", "9123", "The Prometheus metrics exposition port. Defaults to 9123")
 	flag.BoolVar(&printVersion, "version", false, "Prints the version number and exits")
 }
 

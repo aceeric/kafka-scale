@@ -15,15 +15,26 @@ spec:
       labels:
         app.kubernetes.io/name: kafka-scale-results
         appzygy.net/name: results
+        appzygy.net/observable: "true"
     spec:
       containers:
       - name: reader
         image: quay.io/appzygy/kafka-scale:1.0.0
+        imagePullPolicy: Always
         args:
         - --kafka=my-cluster-kafka-bootstrap:9092
         - --verbose
         - --port=8888
+        - --with-metrics
+        - --metrics-port=9123
         - results
+        ports:
+        # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/
+        # believe this is INFORMATIONAL and not really necessary
+        - name: metrics
+          containerPort: 9123
+        - name: results
+          containerPort: 8888
         resources:
           requests:
             memory: "20Mi"
