@@ -33,9 +33,9 @@ spec:
         resources:
           requests:
             memory: "20Mi"
-            cpu: "100m"
+            cpu: "300m"
           limits:
             memory: "40Mi"
-            cpu: "100m"
+            cpu: "300m"
       serviceAccount: default
       serviceAccountName: default

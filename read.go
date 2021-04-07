@@ -110,6 +110,12 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 			return chunks, false
 		}
 	}
+	return doChunk(writer, chunkCount, chunks, year, writeTo, verbose, rdr)
+}
+
+// Reads the passed reader until it provides no more data. Creates chunks and writes the chunks to Kafka or
+// stdout or null depending on the 'writeTo' arg
+func doChunk(writer *kafka.Writer, chunkCount int, chunks int, year int, writeTo string, verbose bool, rdr io.Reader) (int, bool) {
 	scanner := bufio.NewScanner(rdr)
 	// insert a line as the first line of each chunk - the entire contents of the line is the value of the year
 	// e.g. "2019\n"
@@ -121,9 +127,10 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 		cnt++
 		// chunk every ten lines
 		if cnt >= 10 {
-			if writeTo == writeToStdout {
+			if verbose || (writeTo == writeToStdout) {
 				fmt.Printf("chunk: %v\n", chunk)
-			} else if writeTo == writeToKafka {
+			}
+			if writeTo == writeToKafka {
 				if err := writeMessage(writer, chunk, verbose); err != nil {
 					fmt.Printf("error writing chunk to Kafka - error is: %v\n", err)
 					return chunks, false
@@ -131,12 +138,12 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 				chunksWritten.Inc()
 			}
 			chunks++
-			cnt = 0
-			chunk = ""
 			if chunkCount >= 0 && chunks >= chunkCount {
 				fmt.Printf("chunk count met: %v. Stopping\n", chunks)
 				return chunks, true
 			}
+			chunk = strconv.Itoa(year) + "\n"
+			cnt = 0
 		}
 	}
 	return chunks, true

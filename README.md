@@ -1,25 +1,5 @@
-
-
-
-
-port forward to results pod
-curl localhost:8888/results - empty result set
-  thats ok - because no results yet
-but:
-  browser
-    http://192.168.0.45:8888/results
-  unable to connct
-
-
-kc port-forward -nkafka kafka-scale-results-5cbd84d7c9-jq56n 8888
-   OK !!!
-kc port-forward -nkafka svc/kafka-scale-results 8888
-   OK !!!
-curl -i -H "Accept: application/json" 192.168.0.45:32099/results
-   NO FAIL!
-
-    conclusion -- servicve is no reaching pod?????????????????
-
+### consume the results endpoint
+curl --silent -H "Accept: application/json"  http://192.168.0.46:32099/results | json_pp
 
 
 ### TODO

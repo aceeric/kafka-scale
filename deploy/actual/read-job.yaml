@@ -21,7 +21,7 @@ spec:
         - --kafka=my-cluster-kafka-bootstrap:9092
         - --verbose
         - --years=2018,2019
-        - --months=*
+        - --months=jan
         - --with-metrics
         - --compute-topic-partitions=10
         - --compute-topic-replfactor=1
@@ -33,10 +33,10 @@ spec:
         resources:
           requests:
             memory: "20Mi"
-            cpu: "1"
+            cpu: "300m"
           limits:
             memory: "40Mi"
-            cpu: "1"
+            cpu: "300m"
       restartPolicy: Never
       serviceAccount: default
       serviceAccountName: default
