@@ -22,9 +22,10 @@ spec:
         - --verbose
         - --years=2018,2019
         - --months=jan
-        - --with-metrics
         - --compute-topic-partitions=10
         - --compute-topic-replfactor=1
+        - --chunks=1000
+        - --with-metrics
         - --metrics-port=9123
         - read
         ports:

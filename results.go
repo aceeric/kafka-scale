@@ -117,6 +117,7 @@ func serveResults(port int) {
 }
 
 func resultsHandler(w http.ResponseWriter, r *http.Request) {
+	// todo don't ref global var
 	if verbose {
 		fmt.Printf("Http response handler invoked\n")
 	}

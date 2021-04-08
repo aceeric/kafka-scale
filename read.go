@@ -97,7 +97,7 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 			fmt.Printf("error creating gzip reader over url: %v, error is: %v\n", url, err)
 			return chunks, false
 		}
-		downloadedGzips.Inc()
+		downloadedGZips.Inc()
 	} else {
 		rdr, err = os.Open(url)
 		if err != nil {

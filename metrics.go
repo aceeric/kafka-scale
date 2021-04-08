@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var downloadedGzips Counter
+var downloadedGZips Counter
 var chunksWritten Counter
 var computeMessagesRead Counter
 var resultMessagesWritten Counter
@@ -28,15 +28,19 @@ func init() {
 	initMetrics()
 }
 
-func startMetrics() {
+// starts the prometheus metrics server
+func startMetrics(MetricsPort string) {
 	server = &http.Server{Addr: ":" + MetricsPort, Handler: promhttp.Handler()}
+	fmt.Printf("starting prometheus metrics http server on port %v\n", MetricsPort)
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			fmt.Printf("instrumentation was unable to start the Prometheus HTTP server. Metrics will not be enabled. The error is: %v\n", err)
+			fmt.Printf("metrics server exited with result: %v\n", err)
 		}
 	}()
+	fmt.Printf("metrics server is running\n")
 }
 
+// stops the prometheus metrics server
 func stopMetrics() {
 	if server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -60,7 +64,7 @@ func stopMetrics() {
 //}
 
 func initMetrics() {
-	downloadedGzips = NewCounter(
+	downloadedGZips = NewCounter(
 		prometheus.CounterOpts{
 			Name: "kafka_scale_downloaded_gzips",
 			Help: "The Count of census gzip files downloaded from the US Census website",

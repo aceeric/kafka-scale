@@ -74,13 +74,12 @@ func main() {
 		return
 	}
 	if withMetrics {
-		startMetrics()
+		startMetrics(MetricsPort)
 		defer stopMetrics()
 	}
 	switch command {
 	case read:
-		readCmd(kafkaBrokers, partitionCnt, replicationFactor, fromFile, chunkCount, yearsArr, monthsArr,
-			writeTo, verbose)
+		readCmd(kafkaBrokers, partitionCnt, replicationFactor, fromFile, chunkCount, yearsArr, monthsArr, writeTo, verbose)
 	case compute:
 		computeCmd(kafkaBrokers, partitionCnt, replicationFactor, verbose, writeTo)
 	case results:
