@@ -14,17 +14,17 @@ import (
 // Reads from the 'compute' topic, calculates results, and writes to the 'results' topic. Blocks reading from the
 // compute topic indefinitely. So once the topic is emptied, this function will block indefinitely. On the other hand
 // since it is sitting blocking, you can add more results using the read command and processing here will just resume
-func computeCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, verbose bool, writeTo string) {
+func computeCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, verbose bool, writeTo string, delay int) {
 	if err := createTopicIfNotExists(kafkaBrokers, results_topic, partitionCnt, replicationFactor); err != nil {
 		fmt.Printf("error creating topic %v, error is:%v\n", results_topic, err)
 		return
 	}
 	writer := newKafkaWriter(kafkaBrokers, results_topic)
 	defer writer.Close()
-	calc(writer, kafkaBrokers, verbose, writeTo)
+	calc(writer, kafkaBrokers, verbose, writeTo, delay)
 }
 
-func calc(writer *kafka.Writer, url string, verbose bool, writeTo string) bool {
+func calc(writer *kafka.Writer, url string, verbose bool, writeTo string, delay int) bool {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:       strings.Split(url, ","),
 		GroupID:       consumerGrpForTopic[compute_topic],
@@ -73,7 +73,9 @@ func calc(writer *kafka.Writer, url string, verbose bool, writeTo string) bool {
 			lineCnt++
 		}
 		// todo simulate some compute time
-		time.Sleep(100 * time.Millisecond)
+		if delay > 0 {
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+		}
 		if verbose {
 			fmt.Printf("Message: %v\n", codes)
 		}

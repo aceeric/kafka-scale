@@ -11,20 +11,23 @@ import (
 // initialize command line args and default values
 func init() {
 	flag.StringVar(&years, "years", "", "Years. E.g. --years=2015,2016. Ignored unless role is 'read'")
-	flag.StringVar(&months, "months", "", "Months. E.g. --months=jan,feb. Ignored unless role is 'read'. '*' is also allowed (use single ticks to exclude from shell parsing)")
+	flag.StringVar(&months, "months", "", "Months. E.g. --months=jan,feb. Ignored unless role is 'read'. Asterisk (*) is also allowed, meaning 'all'")
 	flag.StringVar(&kafkaBrokers, "kafka", "", "Kafka broker URLs. E.g. 192.168.0.45:32355,192.168.0.46:32355,192.168.0.47:32355")
 	flag.IntVar(&chunkCount, "chunks", -1, "Chunk count - the number of chunks of 'dataSrc' to read or calculate. If omitted, or -1, then all")
 	flag.BoolVar(&dryRun, "dry-run", false, "Displays how the command would run, but doesn't actually run it")
-	flag.StringVar(&writeTo, "write-to", writeToKafka, "Where to send the output of the read and compute commands. Defaults to 'kafka'. Valid values are : 'kafka', 'stdout', and 'null'")
-	flag.IntVar(&partitionCnt, "compute-topic-partitions", 1, "Partitions for the compute topic. Defaults to 1. Tune to the number of compute pods")
-	flag.IntVar(&replicationFactor, "compute-topic-replfactor", 1, "Replication factor for the compute topic. Defaults to 1. Tune to your Kafka cluster size")
-	flag.StringVar(&fromFile, "from-file", "", "FQPN of census file to load (i.e. don't download from the census site - use a file on the filesystem)")
+	flag.StringVar(&writeTo, "write-to", writeToKafka, "Where to send the output of the read and compute commands. Valid values are: 'kafka', 'stdout', and 'null'")
+	flag.IntVar(&partitionCnt, "compute-topic-partitions", 1, "Partitions for the compute topic. Tune to the number of compute pods")
+	flag.IntVar(&replicationFactor, "compute-topic-replfactor", 1, "Replication factor for the compute topic. Tune to your Kafka cluster size")
+	flag.StringVar(&fromFile, "from-file", "", "FQPN of census file to load (i.e. don't download from the census site - use a file on the filesystem). Also requires you to specify a year via the --years option")
 	flag.StringVar(&topic, "topic", "", "If listing offsets, this is the topic for which to list offsets. If deleting topics, this is a comma-separated list of topics to delete")
 	flag.BoolVar(&verbose, "verbose", false, "Prints verbose diagnostic messages")
-	flag.IntVar(&port, "port", 8888, "REST endpoint port for results - defaults to 8888")
+	flag.IntVar(&resultsPort, "results-port", 8888, "REST endpoint port for results")
+	flag.IntVar(&delay, "delay", 0, "slows down processing by introducing a delay in the processing loops. Value is millis. Default is zero (no delay)")
 	flag.BoolVar(&withMetrics, "with-metrics", false, "Enables Prometheus metrics exposition")
-	flag.StringVar(&MetricsPort, "metrics-port", "9123", "The Prometheus metrics exposition port. Defaults to 9123")
+	flag.StringVar(&metricsPort, "metrics-port", "9123", "The Prometheus metrics exposition port")
 	flag.BoolVar(&printVersion, "version", false, "Prints the version number and exits")
+	flag.BoolVar(&noShutdownReader, "no-shutdown-reader", false, "If true, leaves the reader running (inactive) after all gzips have been processed and chunked")
+	flag.BoolVar(&force, "force", false, "Forces some commands. So far - only applies to rmtopics command")
 }
 
 var validCommands = []string {read, compute, results, topiclist, offsets, rmtopics}
@@ -110,7 +113,7 @@ func doDryRun() {
 	}
 	if command == results {
 		fmt.Printf("Kafka bootstrap URL: %v\n", kafkaBrokers)
-		fmt.Printf("Results port: %v\n", port)
+		fmt.Printf("Results port: %v\n", resultsPort)
 	}
 	if command == topiclist || command == rmtopics || command == offsets {
 		fmt.Printf("Topic: %v\n", topic)

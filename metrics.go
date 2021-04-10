@@ -24,12 +24,9 @@ var resultMessagesRead Counter
 
 var server *http.Server
 
-func init() {
-	initMetrics()
-}
-
 // starts the prometheus metrics server
-func startMetrics(MetricsPort string) {
+func startMetrics(MetricsPort string, command string) {
+	initMetrics(command)
 	server = &http.Server{Addr: ":" + MetricsPort, Handler: promhttp.Handler()}
 	fmt.Printf("starting prometheus metrics http server on port %v\n", MetricsPort)
 	go func() {
@@ -63,37 +60,42 @@ func stopMetrics() {
 //	}
 //}
 
-func initMetrics() {
-	downloadedGZips = NewCounter(
-		prometheus.CounterOpts{
-			Name: "kafka_scale_downloaded_gzips",
-			Help: "The Count of census gzip files downloaded from the US Census website",
-		},
-	)
-	chunksWritten = NewCounter(
-		prometheus.CounterOpts{
-			Name: "kafka_scale_chunks_written",
-			Help: fmt.Sprintf("The Count of Census data chunks written by the read command to the %v topic", compute_topic),
-		},
-	)
-	computeMessagesRead = NewCounter(
-		prometheus.CounterOpts{
-			Name: "kafka_scale_compute_messages_read",
-			Help: fmt.Sprintf("The Count of messages read by the compute command from the %v topic", compute_topic),
-		},
-	)
-	resultMessagesWritten = NewCounter(
-		prometheus.CounterOpts{
-			Name: "kafka_scale_result_messages_written",
-			Help: fmt.Sprintf("The Count of messages written by the compute command to the %v topic", results_topic),
-		},
-	)
-	resultMessagesRead = NewCounter(
-		prometheus.CounterOpts{
-			Name: "kafka_scale_result_messages_read",
-			Help: fmt.Sprintf("The Count of messages read by the result command from the %v topic", results_topic),
-		},
-	)
+func initMetrics(command string) {
+	switch command {
+	case read:
+		downloadedGZips = NewCounter(
+			prometheus.CounterOpts{
+				Name: "kafka_scale_downloaded_gzips",
+				Help: "The Count of census gzip files downloaded from the US Census website",
+			},
+		)
+		chunksWritten = NewCounter(
+			prometheus.CounterOpts{
+				Name: "kafka_scale_chunks_written",
+				Help: fmt.Sprintf("The Count of Census data chunks written by the read command to the %v topic", compute_topic),
+			},
+		)
+	case compute:
+		computeMessagesRead = NewCounter(
+			prometheus.CounterOpts{
+				Name: "kafka_scale_compute_messages_read",
+				Help: fmt.Sprintf("The Count of messages read by the compute command from the %v topic", compute_topic),
+			},
+		)
+		resultMessagesWritten = NewCounter(
+			prometheus.CounterOpts{
+				Name: "kafka_scale_result_messages_written",
+				Help: fmt.Sprintf("The Count of messages written by the compute command to the %v topic", results_topic),
+			},
+		)
+	case results:
+		resultMessagesRead = NewCounter(
+			prometheus.CounterOpts{
+				Name: "kafka_scale_result_messages_read",
+				Help: fmt.Sprintf("The Count of messages read by the result command from the %v topic", results_topic),
+			},
+		)
+	}
 
 	//TestCounterVec = NewCounterVec(
 	//	prometheus.CounterOpts{

@@ -24,8 +24,9 @@ type HousingResult struct {
 	Count       int
 }
 
-// HousingResults is a map. The main key is year. For each year, there is a map. The key of that
-// nested map is a housing code (int) and the value of the map is the description and count for that housing code
+// HousingResults is a map. The key is a year. For each year, there is a map. The key of that nested
+// map is a housing code (int) and the value of the sub-map is the description and count for that housing code
+// accumulated from the Kafka results topic
 var HousingResults = map[int]map[int]HousingResult{}
 
 // Reads from the 'results' topic indefinitely, blocking until a result is available. Each result message
@@ -34,8 +35,8 @@ var HousingResults = map[int]map[int]HousingResult{}
 // the count of the `housingResult` item in the `housingResults' map whose entry is identified by the code. Invalid
 // codes are simply ignored. Modifications to the `housingResults' variable are guarded by a mutex since this data
 // is also available for consumption via a REST endpoint.
-func resultsCmd(kafkaBrokers string, port int, verbose bool) {
-	go serveResults(port)
+func resultsCmd(kafkaBrokers string, resultsPort int, verbose bool, delay int) {
+	go serveResults(resultsPort)
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:       strings.Split(kafkaBrokers, ","),
 		GroupID:       consumerGrpForTopic[results_topic],
@@ -76,10 +77,14 @@ func resultsCmd(kafkaBrokers string, port int, verbose bool) {
 			mu.Lock()
 			HousingResults[year] = housingResult
 			mu.Unlock()
+			if delay > 0 {
+				time.Sleep(time.Duration(delay) * time.Millisecond)
+			}
 		}
 	}
 }
 
+// returns a struct that can accumulate housing values for one calendar year
 func newHousingResults(year int) map[int]HousingResult {
 	HousingResults[year] = map[int]HousingResult{
 		0:  {"OTHER UNIT", 0},
@@ -99,23 +104,25 @@ func newHousingResults(year int) map[int]HousingResult {
 	return HousingResults[year]
 }
 
-func serveResults(port int) {
-	fmt.Printf("Starting http server on port: %v\n", port)
+// starts an http server to server the accumulated results. Handler is resultsHandler func
+func serveResults(resultsPort int) {
+	fmt.Printf("Starting http server on port: %v\n", resultsPort)
 
 	r := mux.NewRouter()
 	r.HandleFunc("/results", resultsHandler)
 
 	// address can't be loopback - does not work in cluster - possibly I need to configure the pod
-	// networking to handle that? Anyway - the ":PORT" form used below works
+	// networking to handle that? Anyway - the ":PORT" form used below works on the desktop and in cluster
 	srv := &http.Server{
 		Handler:      r,
-		Addr:         ":" + strconv.Itoa(port),
+		Addr:         ":" + strconv.Itoa(resultsPort),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
 	fmt.Printf("Results server terminated with result: %v\n", srv.ListenAndServe())
 }
 
+// provides a JSON response to the http client with the current results
 func resultsHandler(w http.ResponseWriter, r *http.Request) {
 	// todo don't ref global var
 	if verbose {

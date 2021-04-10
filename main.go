@@ -13,11 +13,14 @@ var replicationFactor int
 var fromFile string
 var topic string
 var verbose bool
-var port int
+var resultsPort int
+var delay int
 var withMetrics bool
-var MetricsPort string
+var metricsPort string
 var printVersion bool
 var writeTo string
+var noShutdownReader bool
+var force bool
 
 const (
 	// supported commands
@@ -60,7 +63,7 @@ var consumerGrpForTopic = map[string]string {
 // ./kafka-scale --years=2019 --months='*' --write-to=stdout read
 // ./kafka-scale --kafka=$IP:$PORT --from-file=/home/eace/Downloads/dec20pub.dat.gz --years=2019 --compute-topic-partitions=10 --chunks=1 read
 // ./kafka-scale --kafka=$IP:$PORT --write-to=stdout --verbose compute
-// ./kafka-scale --kafka=$IP:$PORT --verbose --port=8888 results
+// ./kafka-scale --kafka=$IP:$PORT --verbose --results-port=8888 results
 // ./kafka-scale --kafka=$IP:$PORT topiclist
 // ./kafka-scale --kafka=$IP:$PORT --topic=compute offsets
 // ./kafka-scale --kafka=$IP:$PORT --topic=compute,results rmtopics
@@ -74,21 +77,26 @@ func main() {
 		return
 	}
 	if withMetrics {
-		startMetrics(MetricsPort)
+		startMetrics(metricsPort, command)
 		defer stopMetrics()
 	}
 	switch command {
 	case read:
-		readCmd(kafkaBrokers, partitionCnt, replicationFactor, fromFile, chunkCount, yearsArr, monthsArr, writeTo, verbose)
+		readCmd(kafkaBrokers, partitionCnt, replicationFactor, fromFile, chunkCount, yearsArr, monthsArr, writeTo, verbose, delay)
+		if noShutdownReader {
+			// this is just a development aid to leave the container running so the metrics endpoint continues
+			// to be available even if all gzips have been processed
+			select{}
+		}
 	case compute:
-		computeCmd(kafkaBrokers, partitionCnt, replicationFactor, verbose, writeTo)
+		computeCmd(kafkaBrokers, partitionCnt, replicationFactor, verbose, writeTo, delay)
 	case results:
-		resultsCmd(kafkaBrokers, port, verbose)
+		resultsCmd(kafkaBrokers, resultsPort, verbose, delay)
 	case topiclist:
 		topicListCmd(kafkaBrokers)
 	case offsets:
 		offsetsCmd(kafkaBrokers, topic)
 	case rmtopics:
-		rmTopicsCmd(kafkaBrokers, topic)
+		rmTopicsCmd(kafkaBrokers, topic, force)
 	}
 }

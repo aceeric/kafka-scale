@@ -148,7 +148,14 @@ func getPartitionsForTopic(kafkaBrokers string, topic string) ([]int, error) {
 }
 
 // deletes the passed topics. Supports testing. Topics is a comma-separated list of topics. E.g.: "footopic,bartopic"
-func rmTopicsCmd(kafkaBrokers string, topics string) {
+func rmTopicsCmd(kafkaBrokers string, topics string, force bool) {
+	if !force {
+		fmt.Printf("If the Strimzi operator is running, it is likely that Strimzi will re-create your topic as a reconciliation event immediately after you delete it.\n")
+		fmt.Printf("To delete the topic using Strimzi: kubectl -n <your-strimzi-namespace> delete kafkatopic <the-topic-you-want-to-delete>\n")
+		fmt.Printf("If you want to perform the topic deletion using the kafka-scale utility, specify the --force option\n")
+		return
+	}
+
 	client, shutdown := newClient(kafka.TCP(kafkaBrokers))
 	defer shutdown()
 

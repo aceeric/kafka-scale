@@ -9,4 +9,3 @@ spec:
       appzygy.net/observable: "true"
   podMetricsEndpoints:
   - port: metrics
-q

@@ -1,40 +1,35 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: kafka-scale-results
+  name: kafka-scale-read
   namespace: kafka
   labels:
-    app.kubernetes.io/name: kafka-scale-results
+    app.kubernetes.io/name: kafka-scale-read
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      appzygy.net/name: results
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: kafka-scale-results
-        appzygy.net/name: results
+        app.kubernetes.io/name: kafka-scale-read
+        appzygy.net/name: read
         appzygy.net/observable: "true"
     spec:
       containers:
-      - name: reader
+      - name: read
         image: quay.io/appzygy/kafka-scale:1.0.0
         imagePullPolicy: Always
         args:
         - --kafka=my-cluster-kafka-bootstrap:9092
-        - --verbose
-        - --port=8888
+        - --years=2017,2018,2019
+        - --months=*
+        - --compute-topic-partitions=10
+        - --compute-topic-replfactor=1
         - --with-metrics
         - --metrics-port=9123
-        - results
+        - --no-shutdown-reader
+        - read
         ports:
-        # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/
-        # believe this is INFORMATIONAL and not really necessary
         - name: metrics
           containerPort: 9123
-        - name: results
-          containerPort: 8888
         resources:
           requests:
             memory: "20Mi"
@@ -42,5 +37,7 @@ spec:
           limits:
             memory: "40Mi"
             cpu: "100m"
+      restartPolicy: Never
       serviceAccount: default
       serviceAccountName: default
+  backoffLimit: 4

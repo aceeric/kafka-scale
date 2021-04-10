@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -28,7 +29,7 @@ const gzurl = "https://www2.census.gov/programs-surveys/cps/datasets/%v/basic/%v
 // supports throttling via the package-level 'chunkCount' variable initialized from the command line.
 
 func readCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, fromFile string, chunkCount int,
-	yearsArr []int, monthsArr []string, writeTo string, verbose bool) {
+	yearsArr []int, monthsArr []string, writeTo string, verbose bool, delay int) {
 	var writer *kafka.Writer
 	if kafkaBrokers != "" {
 		if err := createTopicIfNotExists(kafkaBrokers, compute_topic, partitionCnt, replicationFactor); err != nil {
@@ -38,7 +39,7 @@ func readCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, fromF
 		writer = newKafkaWriter(kafkaBrokers, compute_topic)
 		defer writer.Close()
 	}
-	if chunks, ok := readAndChunk(writer, fromFile, chunkCount, yearsArr, monthsArr, writeTo, verbose); !ok {
+	if chunks, ok := readAndChunk(writer, fromFile, chunkCount, yearsArr, monthsArr, writeTo, verbose, delay); !ok {
 		fmt.Printf("error processing census data. %v chunks were processed before stopping\n", chunks)
 	} else {
 		fmt.Printf("no errors were encountered processing census data. %v chunks were processed\n", chunks)
@@ -48,16 +49,17 @@ func readCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, fromF
 // reads from the passed file it not "" or builds census data urls to read from. Either way, reads the gzip
 // and writes to the passed writer
 func readAndChunk(writer *kafka.Writer, fromFile string, chunkCount int, yearsArr []int, monthsArr []string, writeTo string,
-	verbose bool) (int, bool) {
+	verbose bool, delay int) (int, bool) {
 	chunks := 0
 	var ok bool
 	if fromFile != "" {
-		return oneGz(writer, chunkCount, chunks, fromFile, yearsArr[0], writeTo, verbose)
+		return oneGz(writer, chunkCount, chunks, fromFile, yearsArr[0], writeTo, verbose, delay)
 	}
 	for _, year := range yearsArr {
 		for _, month := range monthsArr {
-			if chunks, ok = oneGz(writer, chunkCount, chunks, fmt.Sprintf(gzurl, year, month, strconv.Itoa(year)[2:]), year, writeTo, verbose); !ok {
-				return chunks, false
+			if chunks, ok = oneGz(writer, chunkCount, chunks, fmt.Sprintf(gzurl, year, month, strconv.Itoa(year)[2:]), year, writeTo, verbose, delay); !ok {
+				// don't stop - just keep getting data if possible and ignore errors
+				continue
 			} else if chunkCount >= 0 && chunks >= chunkCount {
 				return chunks, true
 			}
@@ -74,7 +76,7 @@ func readAndChunk(writer *kafka.Writer, fromFile string, chunkCount int, yearsAr
 //
 // Returns the cumulative number of chunks processed so far (including chunks from prior calls) and true if success,
 // else false if error. Returns if package var 'chunkCount' count is met.
-func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year int, writeTo string, verbose bool) (int, bool) {
+func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year int, writeTo string, verbose bool, delay int) (int, bool) {
 	var rdr io.Reader
 	var err error
 
@@ -110,12 +112,12 @@ func oneGz(writer *kafka.Writer, chunkCount int, chunks int, url string, year in
 			return chunks, false
 		}
 	}
-	return doChunk(writer, chunkCount, chunks, year, writeTo, verbose, rdr)
+	return doChunk(writer, chunkCount, chunks, year, writeTo, verbose, rdr, delay)
 }
 
 // Reads the passed reader until it provides no more data. Creates chunks and writes the chunks to Kafka or
 // stdout or null depending on the 'writeTo' arg
-func doChunk(writer *kafka.Writer, chunkCount int, chunks int, year int, writeTo string, verbose bool, rdr io.Reader) (int, bool) {
+func doChunk(writer *kafka.Writer, chunkCount int, chunks int, year int, writeTo string, verbose bool, rdr io.Reader, delay int) (int, bool) {
 	scanner := bufio.NewScanner(rdr)
 	// insert a line as the first line of each chunk - the entire contents of the line is the value of the year
 	// e.g. "2019\n"
@@ -132,7 +134,6 @@ func doChunk(writer *kafka.Writer, chunkCount int, chunks int, year int, writeTo
 			}
 			if writeTo == writeToKafka {
 				if err := writeMessage(writer, chunk, verbose); err != nil {
-					fmt.Printf("error writing chunk to Kafka - error is: %v\n", err)
 					return chunks, false
 				}
 				chunksWritten.Inc()
@@ -144,6 +145,9 @@ func doChunk(writer *kafka.Writer, chunkCount int, chunks int, year int, writeTo
 			}
 			chunk = strconv.Itoa(year) + "\n"
 			cnt = 0
+			if delay > 0 {
+				time.Sleep(time.Duration(delay) * time.Millisecond)
+			}
 		}
 	}
 	return chunks, true
