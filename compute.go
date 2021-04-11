@@ -72,7 +72,6 @@ func calc(writer *kafka.Writer, url string, verbose bool, writeTo string, delay 
 			}
 			lineCnt++
 		}
-		// todo simulate some compute time
 		if delay > 0 {
 			time.Sleep(time.Duration(delay) * time.Millisecond)
 		}

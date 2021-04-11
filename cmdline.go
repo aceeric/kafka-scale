@@ -13,7 +13,7 @@ func init() {
 	flag.StringVar(&years, "years", "", "Years. E.g. --years=2015,2016. Ignored unless role is 'read'")
 	flag.StringVar(&months, "months", "", "Months. E.g. --months=jan,feb. Ignored unless role is 'read'. Asterisk (*) is also allowed, meaning 'all'")
 	flag.StringVar(&kafkaBrokers, "kafka", "", "Kafka broker URLs. E.g. 192.168.0.45:32355,192.168.0.46:32355,192.168.0.47:32355")
-	flag.IntVar(&chunkCount, "chunks", -1, "Chunk count - the number of chunks of 'dataSrc' to read or calculate. If omitted, or -1, then all")
+	flag.IntVar(&chunkCount, "chunks", -1, "Chunk count - the number of chunks of census data to read or calculate. If omitted, or -1, then all")
 	flag.BoolVar(&dryRun, "dry-run", false, "Displays how the command would run, but doesn't actually run it")
 	flag.StringVar(&writeTo, "write-to", writeToKafka, "Where to send the output of the read and compute commands. Valid values are: 'kafka', 'stdout', and 'null'")
 	flag.IntVar(&partitionCnt, "compute-topic-partitions", 1, "Partitions for the compute topic. Tune to the number of compute pods")
@@ -22,12 +22,12 @@ func init() {
 	flag.StringVar(&topic, "topic", "", "If listing offsets, this is the topic for which to list offsets. If deleting topics, this is a comma-separated list of topics to delete")
 	flag.BoolVar(&verbose, "verbose", false, "Prints verbose diagnostic messages")
 	flag.IntVar(&resultsPort, "results-port", 8888, "REST endpoint port for results")
-	flag.IntVar(&delay, "delay", 0, "slows down processing by introducing a delay in the processing loops. Value is millis. Default is zero (no delay)")
+	flag.IntVar(&delay, "delay", 0, "slows down processing by introducing a delay in the processing loops. Value is millis. Supports testing")
 	flag.BoolVar(&withMetrics, "with-metrics", false, "Enables Prometheus metrics exposition")
 	flag.StringVar(&metricsPort, "metrics-port", "9123", "The Prometheus metrics exposition port")
 	flag.BoolVar(&printVersion, "version", false, "Prints the version number and exits")
 	flag.BoolVar(&noShutdownReader, "no-shutdown-reader", false, "If true, leaves the reader running (inactive) after all gzips have been processed and chunked")
-	flag.BoolVar(&force, "force", false, "Forces some commands. So far - only applies to rmtopics command")
+	flag.BoolVar(&force, "force", false, "Forces some commands. So far - only applies to the rmtopics command")
 }
 
 var validCommands = []string {read, compute, results, topiclist, offsets, rmtopics}

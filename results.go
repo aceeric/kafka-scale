@@ -84,9 +84,10 @@ func resultsCmd(kafkaBrokers string, resultsPort int, verbose bool, delay int) {
 	}
 }
 
-// returns a struct that can accumulate housing values for one calendar year
+// returns a struct that can accumulate housing values for one calendar year. The map key and descriptions
+// are exactly as defined by the census data documentation
 func newHousingResults(year int) map[int]HousingResult {
-	HousingResults[year] = map[int]HousingResult{
+	hr := map[int]HousingResult{
 		0:  {"OTHER UNIT", 0},
 		1:  {"HOUSE, APARTMENT, FLAT", 0},
 		2:  {"HU IN NONTRANSIENT HOTEL, MOTEL, ETC.", 0},
@@ -101,10 +102,10 @@ func newHousingResults(year int) map[int]HousingResult {
 		11: {"STUDENT QUARTERS IN COLLEGE DORM", 0},
 		12: {"OTHER UNIT NOT SPECIFIED ABOVE", 0},
 	}
-	return HousingResults[year]
+	return hr
 }
 
-// starts an http server to server the accumulated results. Handler is resultsHandler func
+// starts an http server to serve the accumulated in-memory results
 func serveResults(resultsPort int) {
 	fmt.Printf("Starting http server on port: %v\n", resultsPort)
 
@@ -122,7 +123,7 @@ func serveResults(resultsPort int) {
 	fmt.Printf("Results server terminated with result: %v\n", srv.ListenAndServe())
 }
 
-// provides a JSON response to the http client with the current results
+// provides a JSON response of the current summarized results
 func resultsHandler(w http.ResponseWriter, r *http.Request) {
 	// todo don't ref global var
 	if verbose {
