@@ -64,10 +64,10 @@ The manifests directory contains several manifests that run the application. Onc
 
 ```shell
 $ kubectl create namespace kafka
-$ find manifests -name '*.yaml' -maxdepth 1 | xargs kubectl apply -f
+$ find manifests -maxdepth 1 -name '*.yaml' | xargs kubectl apply -f
 ```
 
-The reader is configured out of the box to create the compute topic with 10 partitions, but only two compute replicas are created. The compute deployment can be modified in cluster to scale up to 10 replicas to observe the performance improvement from increased parallelization.
+The manifests create the compute topic with 10 partitions, but only two compute replicas are created. The compute deployment can be modified in cluster to scale up to 10 replicas to observe the performance improvement from increased parallelization. As discussed further down in the readme, if you have Grafana running in the cluster you can import the dashboard `manifests/kafka-scale-grafana-dashboard.json` to observe the read/compute metrics.
 
 ### Manifests
 
