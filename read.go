@@ -46,7 +46,7 @@ func readCmd(kafkaBrokers string, partitionCnt int, replicationFactor int, fromF
 	}
 }
 
-// reads from the passed file it not "" or builds census data urls to read from. Either way, reads the gzip
+// reads from the passed file if not "" or builds census data urls to read from. Either way, reads the gzip
 // and writes to the passed writer
 func readAndChunk(writer *kafka.Writer, fromFile string, chunkCount int, yearsArr []int, monthsArr []string, writeTo string,
 	verbose bool, delay int) (int, bool) {

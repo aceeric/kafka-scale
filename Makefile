@@ -1,5 +1,5 @@
 ROOT           := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-APP_VERSION    := 1.0.0
+APP_VERSION    := 1.0.1
 IMAGE_REGISTRY := quay.io
 IMAGE_ORG      := appzygy
 IMAGE_NAME     := kafka-scale

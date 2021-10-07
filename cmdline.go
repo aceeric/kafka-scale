@@ -32,7 +32,7 @@ func init() {
 
 var validCommands = []string {read, compute, results, topiclist, offsets, rmtopics}
 
-var version = "1.0.0"
+var version = "1.0.1"
 
 // Validate the command line
 func validateCmdline() bool {

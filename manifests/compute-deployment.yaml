@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: reader
-        image: quay.io/appzygy/kafka-scale:1.0.0
+        image: quay.io/appzygy/kafka-scale:1.0.1
         imagePullPolicy: Always
         args:
         - --kafka=my-cluster-kafka-bootstrap:9092
@@ -32,9 +32,9 @@ spec:
         resources:
           requests:
             memory: "20Mi"
-            cpu: "100m"
+            cpu: "500m"
           limits:
             memory: "40Mi"
-            cpu: "100m"
+            cpu: "500m"
       serviceAccount: default
       serviceAccountName: default

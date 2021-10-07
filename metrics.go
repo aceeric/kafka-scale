@@ -26,7 +26,6 @@ var server *http.Server
 
 // starts the prometheus metrics server
 func startMetrics(MetricsPort string, command string) {
-	initMetrics(command)
 	server = &http.Server{Addr: ":" + MetricsPort, Handler: promhttp.Handler()}
 	fmt.Printf("starting prometheus metrics http server on port %v\n", MetricsPort)
 	go func() {

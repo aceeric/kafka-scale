@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: reader
-        image: quay.io/appzygy/kafka-scale:1.0.0
+        image: quay.io/appzygy/kafka-scale:1.0.1
         imagePullPolicy: Always
         args:
         - --kafka=my-cluster-kafka-bootstrap:9092

@@ -76,7 +76,10 @@ func main() {
 		doDryRun()
 		return
 	}
+	// always init the metrics
+	initMetrics(command)
 	if withMetrics {
+		// but only start metrics exposition if --with-metrics is specified
 		startMetrics(metricsPort, command)
 		defer stopMetrics()
 	}
